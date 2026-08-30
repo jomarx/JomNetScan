@@ -47,6 +47,27 @@ Until then the Vendor column stays blank, except for randomized MACs, which are
 detected from the address itself — modern phones rotate these, which is why the
 same handset can reappear as a "new" device.
 
+## Automatic naming
+
+Most devices will tell you their name if you listen. Every scan runs two
+discoveries alongside the ping sweep, so they cost no extra time:
+
+- **mDNS / Bonjour** — Apple gear, Chromecast and Google speakers, printers,
+  NAS boxes, ESPHome nodes. Chromecast-family devices carry the name their owner
+  actually picked in a TXT `fn` record, so you get "bedroom speaker" instead of
+  `Google-Home-Mini-d342580c2f1317daa934ddbb1f730f6c`.
+- **SSDP / UPnP** — smart TVs, routers, media servers. Each responder's device
+  description is fetched and its `<friendlyName>` taken.
+
+Discovered names appear on their own with an **Announced** badge. They do *not*
+count as naming the device — it stays flagged **New** until you name it
+yourself, so auto-naming never quietly silences the new-device alert. A name you
+type always wins over a discovered one.
+
+Expect this to cover the chatty half of a network at best. Cheap IoT plugs and
+bulbs announce nothing and still need naming by hand. Switch it off under
+**Settings → Listen for names devices announce**.
+
 ## How the scan works
 
 1. Read the local IPv4 interfaces and work out each subnet from its netmask.
@@ -55,7 +76,8 @@ same handset can reappear as a "new" device.
    to populate the ARP cache.
 3. Parse `arp -a` for IP/MAC pairs, dropping multicast and broadcast rows.
 4. Read `route print` for the default gateway so the router gets labelled.
-5. Resolve names via reverse DNS, falling back to `nbtstat` for the Windows
+5. Listen for mDNS and SSDP announcements (see Automatic naming above).
+6. Resolve names via reverse DNS, falling back to `nbtstat` for the Windows
    boxes and printers a home router won't have DNS entries for.
 
 A full /24 takes roughly 20–35 seconds, most of it spent spawning `ping`
@@ -86,6 +108,7 @@ src/main/net.js       ping sweep, ARP, route and name lookups
 src/main/scanner.js   orchestrates one scan, emits progress
 src/main/store.js     devices.json + settings.json, atomic writes
 src/main/oui.js       MAC vendor lookup and IEEE registry download
+src/main/discover.js  mDNS and SSDP name discovery
 src/main/main.js      window, tray, notifications, IPC
 src/preload/          the narrow API the UI is allowed to call
 src/renderer/         the UI (plain HTML/CSS/JS, no framework)

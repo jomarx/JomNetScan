@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
   intervalMinutes: 5,
   notifyOnNew: true,
   useNetbios: true,
+  discoverNames: true,
   pingTimeoutMs: 500,
   concurrency: 128,
   interfaceName: null, // null = scan every scannable interface
@@ -88,6 +89,7 @@ class Store {
           ip: device.ip,
           name: null,
           hostname: device.hostname || null,
+          discoveredName: device.discoveredName || null,
           vendor: device.vendor || null,
           isGateway: !!device.isGateway,
           randomizedMac: !!device.randomizedMac,
@@ -106,6 +108,7 @@ class Store {
       existing.ip = device.ip;
       // Keep a name we already resolved if this pass came back empty.
       existing.hostname = device.hostname || existing.hostname;
+      existing.discoveredName = device.discoveredName || existing.discoveredName;
       // Vendor comes from the MAC alone; keep the old value only when this pass
       // had no OUI database loaded. A randomized MAC never has one.
       existing.vendor = device.randomizedMac ? null : (device.vendor || existing.vendor);

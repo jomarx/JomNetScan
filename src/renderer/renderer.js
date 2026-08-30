@@ -10,7 +10,9 @@ let selectedId = null;
 const $ = (id) => document.getElementById(id);
 
 function displayName(device) {
-  return device.name || device.hostname || device.vendor || device.ip;
+  // A name the device announced beats a reverse-DNS hostname, which beats a
+  // bare manufacturer. Anything the user typed wins outright.
+  return device.name || device.discoveredName || device.hostname || device.vendor || device.ip;
 }
 
 function isNew(device) {
@@ -42,7 +44,7 @@ function visibleDevices() {
       if (filter === 'online' && !d.online) return false;
       if (filter === 'offline' && d.online) return false;
       if (!q) return true;
-      return [d.name, d.hostname, d.vendor, d.ip, d.mac, d.notes]
+      return [d.name, d.discoveredName, d.hostname, d.vendor, d.ip, d.mac, d.notes]
         .filter(Boolean)
         .some((field) => field.toLowerCase().includes(q));
     })
@@ -88,8 +90,11 @@ function renderRows() {
     if (device.isGateway) tags.push('<span class="badge tag">Router</span>');
     if (device.isSelf) tags.push('<span class="badge tag">This PC</span>');
     if (device.randomizedMac) tags.push('<span class="badge tag">Random MAC</span>');
+    if (!device.name && device.discoveredName) tags.push('<span class="badge tag">Announced</span>');
 
-    const secondary = device.name && device.hostname ? device.hostname : device.notes || '';
+    const secondary = device.notes
+      || (device.name ? (device.discoveredName || device.hostname || '') : '')
+      || (device.discoveredName ? device.hostname || '' : '');
     const nameClass = device.name ? 'name' : 'name unnamed';
 
     tr.innerHTML = `
@@ -133,6 +138,7 @@ function renderDetail() {
 
   const facts = [
     ['MAC address', device.mac || 'not available'],
+    ['Announced name', device.discoveredName || '-'],
     ['Hostname', device.hostname || '-'],
     ['Vendor', device.vendor || '-'],
     ['MAC type', device.randomizedMac ? 'Randomized (private address)' : 'Hardware address'],
@@ -178,6 +184,7 @@ function renderSettings() {
   $('setInterval').value = s.intervalMinutes;
   $('setNotify').checked = !!s.notifyOnNew;
   $('setNetbios').checked = !!s.useNetbios;
+  $('setDiscover').checked = s.discoverNames !== false;
   $('setTray').checked = !!s.minimizeToTray;
 
   const select = $('setInterface');
@@ -264,6 +271,7 @@ function bindSetting(elementId, key, read) {
 bindSetting('setAutoScan', 'autoScan', (el) => el.checked);
 bindSetting('setNotify', 'notifyOnNew', (el) => el.checked);
 bindSetting('setNetbios', 'useNetbios', (el) => el.checked);
+bindSetting('setDiscover', 'discoverNames', (el) => el.checked);
 bindSetting('setTray', 'minimizeToTray', (el) => el.checked);
 bindSetting('setInterval', 'intervalMinutes', (el) => Math.max(1, Number(el.value) || 5));
 bindSetting('setInterface', 'interfaceName', (el) => el.value || null);
@@ -286,7 +294,7 @@ $('dataBtn').addEventListener('click', () => api.openDataFolder());
 api.onProgress(({ phase, done, total }) => {
   const pct = total ? Math.round((done / total) * 100) : 0;
   $('progressBar').style.width = `${pct}%`;
-  const labels = { ping: 'Pinging the subnet', arp: 'Reading the ARP table', names: 'Resolving names' };
+  const labels = { ping: 'Pinging the subnet', arp: 'Reading the ARP table', names: 'Resolving names', discover: 'Listening for announcements' };
   $('status').className = 'status';
   $('status').textContent = `${labels[phase] || phase} ${done}/${total}`;
 });

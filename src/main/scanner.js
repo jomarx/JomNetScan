@@ -3,6 +3,7 @@
 const { EventEmitter } = require('events');
 const net = require('./net.js');
 const oui = require('./oui.js');
+const discover = require('./discover.js');
 
 class Scanner extends EventEmitter {
   constructor() {
@@ -31,6 +32,14 @@ class Scanner extends EventEmitter {
 
       const selfMacs = new Set(ifaces.map((i) => i.mac).filter(Boolean));
       const selfIps = new Set(ifaces.map((i) => i.address));
+
+      // Devices that announce themselves do so on their own schedule, so start
+      // listening now and collect the results at the end of the scan.
+      const discovery = settings.discoverNames === false
+        ? Promise.resolve(new Map())
+        : discover
+          .discoverNames({ interfaceAddress: ifaces[0].address, timeoutMs: 12000 })
+          .catch(() => new Map());
 
       // 1. Sweep every host so the ARP cache is fresh.
       const hosts = ifaces.flatMap((i) => net.hostsFor(i));
@@ -75,6 +84,16 @@ class Scanner extends EventEmitter {
         named += 1;
         this.emit('progress', { phase: 'names', done: named, total: devices.length });
       });
+
+      // 4. Fold in whatever the devices volunteered about themselves.
+      this.emit('progress', { phase: 'discover', done: 0, total: 1 });
+      const announced = await discovery;
+      for (const device of devices) {
+        const match = announced.get(device.ip);
+        device.discoveredName = match ? match.name : null;
+        device.discoveredVia = match ? match.source : null;
+      }
+      this.emit('progress', { phase: 'discover', done: 1, total: 1 });
 
       devices.sort((a, b) => {
         const [x, y] = [a.ip.split('.').map(Number), b.ip.split('.').map(Number)];
