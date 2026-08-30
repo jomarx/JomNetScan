@@ -6,6 +6,8 @@ let state = { devices: [], settings: {}, interfaces: [], scanning: false, oui: {
 let filter = 'all';
 let query = '';
 let selectedId = null;
+// key null = the default grouping (new first, then online, then address).
+let sort = { key: null, dir: 1 };
 
 const $ = (id) => document.getElementById(id);
 
@@ -36,6 +38,41 @@ function ipSortKey(ip) {
   return ip.split('.').reduce((acc, part) => acc * 256 + Number(part), 0);
 }
 
+/** Something online is "just seen", so it sorts ahead of every timestamp. */
+function recency(device) {
+  if (device.online) return Infinity;
+  const t = Date.parse(device.lastSeen);
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function sortText(device, key) {
+  if (key === 'device') return displayName(device);
+  if (key === 'mac') return device.mac || '';
+  if (key === 'vendor') return device.vendor || '';
+  return '';
+}
+
+function compareBy(key, a, b) {
+  if (key === 'ip') return ipSortKey(a.ip) - ipSortKey(b.ip);
+  if (key === 'lastSeen') return recency(b) - recency(a);
+  return sortText(a, key).localeCompare(sortText(b, key), undefined, {
+    sensitivity: 'base',
+    numeric: true, // so "Device 2" comes before "Device 10"
+  });
+}
+
+/**
+ * A device with no MAC or no vendor belongs at the bottom either way round -
+ * flipping the direction shouldn't promote a column of blanks to the top.
+ */
+function blanksLast(key, a, b) {
+  if (key !== 'mac' && key !== 'vendor') return 0;
+  const x = sortText(a, key);
+  const y = sortText(b, key);
+  if (!x === !y) return 0;
+  return x ? -1 : 1;
+}
+
 function visibleDevices() {
   const q = query.trim().toLowerCase();
   return state.devices
@@ -49,7 +86,14 @@ function visibleDevices() {
         .some((field) => field.toLowerCase().includes(q));
     })
     .sort((a, b) => {
-      // New devices first, then whatever is online, then by address.
+      if (sort.key) {
+        const blank = blanksLast(sort.key, a, b);
+        if (blank) return blank;
+        const result = compareBy(sort.key, a, b) * sort.dir;
+        // Ties fall back to address order so the list never jitters.
+        return result || ipSortKey(a.ip) - ipSortKey(b.ip);
+      }
+      // Default: new devices first, then whatever is online, then by address.
       if (isNew(a) !== isNew(b)) return isNew(a) ? -1 : 1;
       if (a.online !== b.online) return a.online ? -1 : 1;
       return ipSortKey(a.ip) - ipSortKey(b.ip);
@@ -73,6 +117,13 @@ function renderAdoptAll() {
   btn.textContent = pending.length === 1
     ? 'Adopt 1 announced name'
     : `Adopt ${pending.length} announced names`;
+}
+
+function renderSortHeaders() {
+  for (const th of document.querySelectorAll('#headRow th[data-sort]')) {
+    if (th.dataset.sort === sort.key) th.dataset.dir = String(sort.dir);
+    else delete th.dataset.dir;
+  }
 }
 
 function renderStats() {
@@ -244,6 +295,7 @@ function renderSettings() {
 
 function render() {
   renderStats();
+  renderSortHeaders();
   renderAdoptAll();
   renderRows();
   renderDetail();
@@ -286,6 +338,19 @@ $('adoptOneBtn').addEventListener('click', async () => {
   const device = state.devices.find((d) => d.id === selectedId);
   if (!device || !device.discoveredName) return;
   applyState(await api.rename(device.id, device.discoveredName));
+});
+
+$('headRow').addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-sort]');
+  if (!th) return;
+  const key = th.dataset.sort;
+  // Third click on the same column returns to the default grouping, so the
+  // "new devices first" view stays reachable without a separate reset control.
+  if (sort.key !== key) sort = { key, dir: 1 };
+  else if (sort.dir === 1) sort = { key, dir: -1 };
+  else sort = { key: null, dir: 1 };
+  renderRows();
+  renderSortHeaders();
 });
 
 $('detailClose').addEventListener('click', () => select(null));

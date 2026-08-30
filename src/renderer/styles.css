@@ -191,3 +191,17 @@ textarea { resize: vertical; }
 }
 .adopt-one:hover:not(:disabled) { background: #1b2938; border-color: var(--accent); }
 .adopt[hidden], .adopt-one[hidden] { display: none; }
+
+/* Sortable column headers. */
+.devices th[data-sort] { cursor: pointer; user-select: none; white-space: nowrap; }
+.devices th[data-sort]:hover { color: var(--text); }
+.devices th[data-sort]::after {
+  content: '\2195';           /* up-down arrow, shown faintly until sorted */
+  margin-left: 6px;
+  opacity: 0.25;
+  font-size: 10px;
+}
+.devices th[data-sort]:hover::after { opacity: 0.55; }
+.devices th[data-sort][data-dir] { color: var(--accent); }
+.devices th[data-sort][data-dir="1"]::after { content: '\25B2'; opacity: 1; }
+.devices th[data-sort][data-dir="-1"]::after { content: '\25BC'; opacity: 1; }

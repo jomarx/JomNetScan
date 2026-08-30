@@ -42,13 +42,13 @@
     <div class="table-wrap">
       <table class="devices">
         <thead>
-          <tr>
+          <tr id="headRow">
             <th class="col-dot"></th>
-            <th>Device</th>
-            <th>IP address</th>
-            <th>MAC</th>
-            <th>Vendor</th>
-            <th>Last seen</th>
+            <th data-sort="device" title="Sort by name">Device</th>
+            <th data-sort="ip" title="Sort by address">IP address</th>
+            <th data-sort="mac" title="Sort by MAC">MAC</th>
+            <th data-sort="vendor" title="Sort by manufacturer">Vendor</th>
+            <th data-sort="lastSeen" title="Sort by when it was last seen">Last seen</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>

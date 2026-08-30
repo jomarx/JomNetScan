@@ -68,6 +68,21 @@ Until then the Vendor column stays blank, except for randomized MACs, which are
 detected from the address itself — modern phones rotate these, which is why the
 same handset can reappear as a "new" device.
 
+## Sorting and filtering
+
+Click a column header to sort by it — **Device**, **IP address**, **MAC**,
+**Vendor** or **Last seen**. Click again to reverse, and a third time to return
+to the default grouping, which puts new devices first, then whatever is online,
+then address order.
+
+Addresses sort numerically rather than as text, so `.2` comes before `.10`.
+Devices with no MAC or no known vendor sit at the bottom of those columns in
+both directions — flipping the sort shouldn't promote a column of blanks to the
+top. Anything online counts as "just seen" under **Last seen**.
+
+The search box and the All / New / Online / Offline chips narrow the list; the
+sort applies to whatever is left.
+
 ## Automatic naming
 
 Most devices will tell you their name if you listen. Every scan runs two
