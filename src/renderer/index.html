@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
+  <title>JomNetScan</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div>
+        <h1>JomNetScan</h1>
+        <p class="subnet" id="subnet">Looking for a network...</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span class="status" id="status">Ready</span>
+      <button id="scanBtn" class="primary">Scan now</button>
+      <button id="settingsBtn" class="ghost" title="Settings">Settings</button>
+    </div>
+  </header>
+
+  <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+  <section class="stats" id="stats"></section>
+
+  <section class="toolbar">
+    <input id="search" type="search" placeholder="Search name, IP, MAC, vendor..." autocomplete="off" />
+    <div class="filters" id="filters">
+      <button class="chip active" data-filter="all">All</button>
+      <button class="chip" data-filter="new">New</button>
+      <button class="chip" data-filter="online">Online</button>
+      <button class="chip" data-filter="offline">Offline</button>
+    </div>
+  </section>
+
+  <main class="layout">
+    <div class="table-wrap">
+      <table class="devices">
+        <thead>
+          <tr>
+            <th class="col-dot"></th>
+            <th>Device</th>
+            <th>IP address</th>
+            <th>MAC</th>
+            <th>Vendor</th>
+            <th>Last seen</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="empty" id="empty" hidden></p>
+    </div>
+
+    <aside class="detail" id="detail" hidden>
+      <button class="close" id="detailClose" title="Close">&times;</button>
+      <h2 id="detailTitle">Device</h2>
+      <p class="detail-sub" id="detailSub"></p>
+
+      <label for="nameInput">Name this device</label>
+      <input id="nameInput" type="text" placeholder="e.g. Living room TV" autocomplete="off" />
+
+      <label for="notesInput">Notes</label>
+      <textarea id="notesInput" rows="3" placeholder="Whose is it? Where does it live?"></textarea>
+
+      <dl class="facts" id="facts"></dl>
+
+      <div class="detail-actions">
+        <button id="saveBtn" class="primary">Save</button>
+        <button id="forgetBtn" class="danger">Forget</button>
+      </div>
+    </aside>
+  </main>
+
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal-card">
+      <button class="close" id="settingsClose" title="Close">&times;</button>
+      <h2>Settings</h2>
+
+      <label class="row"><input type="checkbox" id="setAutoScan" /> <span>Scan automatically in the background</span></label>
+      <label class="field">Scan every
+        <input type="number" id="setInterval" min="1" max="1440" /> minutes
+      </label>
+      <label class="row"><input type="checkbox" id="setNotify" /> <span>Notify me when a new device appears</span></label>
+      <label class="row"><input type="checkbox" id="setNetbios" /> <span>Ask devices for their NetBIOS name (slower, finds more names)</span></label>
+      <label class="row"><input type="checkbox" id="setTray" /> <span>Keep running in the tray when I close the window</span></label>
+
+      <label class="field">Network interface
+        <select id="setInterface"></select>
+      </label>
+
+      <hr />
+      <h3>Vendor database</h3>
+      <p class="hint" id="ouiStatus"></p>
+      <p class="hint">Downloads the public IEEE MAC registry (about 4 MB) so device makers show up instead of blanks.</p>
+      <button id="ouiBtn" class="ghost">Download vendor database</button>
+
+      <hr />
+      <button id="dataBtn" class="ghost">Open data folder</button>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

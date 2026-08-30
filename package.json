@@ -1,0 +1,38 @@
+{
+  "name": "jomnetscan",
+  "productName": "JomNetScan",
+  "version": "0.1.0",
+  "description": "Simple LAN monitor - see what is on your network, name it, and get told when something new shows up.",
+  "main": "src/main/main.js",
+  "author": "Jomar Maquinay",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "update-oui": "node scripts/update-oui.js",
+    "dist": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.jomarx.jomnetscan",
+    "productName": "JomNetScan",
+    "files": [
+      "src/**/*",
+      "data/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
