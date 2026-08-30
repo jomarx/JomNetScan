@@ -106,7 +106,9 @@ class Store {
       existing.ip = device.ip;
       // Keep a name we already resolved if this pass came back empty.
       existing.hostname = device.hostname || existing.hostname;
-      existing.vendor = device.vendor || existing.vendor;
+      // Vendor comes from the MAC alone; keep the old value only when this pass
+      // had no OUI database loaded. A randomized MAC never has one.
+      existing.vendor = device.randomizedMac ? null : (device.vendor || existing.vendor);
       existing.isGateway = !!device.isGateway;
       existing.randomizedMac = !!device.randomizedMac;
       existing.isSelf = !!device.isSelf;
