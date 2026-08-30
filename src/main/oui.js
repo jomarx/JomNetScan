@@ -62,9 +62,20 @@ function stats() {
   return { entries: table ? Object.keys(table).length : 0, loadedFrom };
 }
 
-function download(destPath) {
+function download(destPath, url = OUI_URL, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
-    const req = https.get(OUI_URL, { timeout: 60000 }, (res) => {
+    const req = https.get(url, { timeout: 60000 }, (res) => {
+      // IEEE shuffles this file around and answers the old path with a redirect.
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        if (redirectsLeft <= 0) {
+          reject(new Error('Too many redirects fetching the IEEE registry'));
+          return;
+        }
+        download(destPath, new URL(res.headers.location, url).toString(), redirectsLeft - 1)
+          .then(resolve, reject);
+        return;
+      }
       if (res.statusCode !== 200) {
         res.resume();
         reject(new Error(`IEEE registry returned HTTP ${res.statusCode}`));
