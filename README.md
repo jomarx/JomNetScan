@@ -38,6 +38,23 @@ To build a Windows installer and a portable `.exe` into `dist/`:
 npm run dist
 ```
 
+That produces `JomNetScan Setup <version>.exe` (installer, per-user, lets you
+pick the directory) and `JomNetScan <version>.exe` (portable, run it from
+anywhere). Both are about 80 MB — that is Electron, not this app. Neither is
+code-signed, so SmartScreen will warn on first run.
+
+**If the build stalls on "retrying 3 more times":** electron-builder unpacks a
+signing toolchain that contains two macOS symlinks, and creating symlinks on
+Windows needs a privilege a normal account doesn't have. The Windows half of
+that archive extracts fine, so unpack it yourself once and the build will reuse
+it:
+
+```bash
+node_modules/7zip-bin/win/x64/7za.exe x "$LOCALAPPDATA/electron-builder/Cache/winCodeSign/"*.7z -o"$LOCALAPPDATA/electron-builder/Cache/winCodeSign/winCodeSign-2.6.0" -y
+```
+
+The two `.dylib` errors it prints are expected and harmless here.
+
 ## Vendor names
 
 MAC-to-manufacturer lookup needs the public IEEE OUI registry, which isn't
