@@ -150,8 +150,11 @@ function renderDetail() {
   panel.hidden = false;
   $('detailTitle').textContent = displayName(device);
   $('detailSub').textContent = `${device.ip} - ${device.online ? 'online' : `last seen ${relativeTime(device.lastSeen)}`}`;
-  $('nameInput').value = device.name || '';
-  $('notesInput').value = device.notes || '';
+  // Never overwrite the box someone is typing in. A scan finishing in the
+  // background re-renders this panel, and that used to wipe an unsaved name.
+  const editing = (el) => el === document.activeElement;
+  if (!editing($('nameInput'))) $('nameInput').value = device.name || '';
+  if (!editing($('notesInput'))) $('notesInput').value = device.notes || '';
 
   const adoptOne = $('adoptOneBtn');
   const announced = device.discoveredName;
@@ -289,9 +292,13 @@ $('detailClose').addEventListener('click', () => select(null));
 
 $('saveBtn').addEventListener('click', async () => {
   if (!selectedId) return;
+  // Read both fields before awaiting anything. Every main-process call pushes
+  // fresh state back, which re-renders this panel - so a value read after an
+  // await is whatever the re-render just put there, not what was typed.
   const id = selectedId;
-  await api.setNotes(id, $('notesInput').value);
-  applyState(await api.rename(id, $('nameInput').value));
+  const name = $('nameInput').value;
+  const notes = $('notesInput').value;
+  applyState(await api.save(id, name, notes));
 });
 
 $('forgetBtn').addEventListener('click', async () => {

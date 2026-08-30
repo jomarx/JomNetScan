@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('jomnet', {
   scan: () => ipcRenderer.invoke('scan:run'),
   rename: (id, name) => ipcRenderer.invoke('device:rename', { id, name }),
   setNotes: (id, notes) => ipcRenderer.invoke('device:notes', { id, notes }),
+  save: (id, name, notes) => ipcRenderer.invoke('device:save', { id, name, notes }),
   acknowledge: (ids) => ipcRenderer.invoke('device:acknowledge', { ids }),
   adoptAnnounced: (ids) => ipcRenderer.invoke('device:adoptAnnounced', { ids }),
   forget: (id) => ipcRenderer.invoke('device:forget', { id }),

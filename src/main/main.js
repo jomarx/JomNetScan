@@ -210,6 +210,12 @@ ipcMain.handle('device:rename', (_e, { id, name }) => {
   return buildState();
 });
 
+ipcMain.handle('device:save', (_e, { id, name, notes }) => {
+  store.update(id, { name, notes });
+  pushState();
+  return buildState();
+});
+
 ipcMain.handle('device:notes', (_e, { id, notes }) => {
   store.setNotes(id, notes);
   pushState();

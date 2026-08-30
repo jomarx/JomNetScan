@@ -143,6 +143,24 @@ class Store {
     return device;
   }
 
+  /**
+   * Set a name and its notes together. Doing these as two round trips let the
+   * state push from the first one re-render the panel and blank the name field
+   * before the second one read it, which silently discarded the name.
+   */
+  update(id, { name, notes }) {
+    const device = this.devices[id];
+    if (!device) return null;
+    if (notes !== undefined) device.notes = notes || '';
+    if (name !== undefined) {
+      const trimmed = (name || '').trim();
+      device.name = trimmed || null;
+      if (trimmed) device.acknowledged = true;
+    }
+    this.saveDevices();
+    return device;
+  }
+
   setNotes(id, notes) {
     const device = this.devices[id];
     if (!device) return null;
