@@ -1,7 +1,7 @@
 {
   "name": "jomnetscan",
   "productName": "JomNetScan",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Simple LAN monitor - see what is on your network, name it, and get told when something new shows up.",
   "main": "src/main/main.js",
   "author": "Jomar Maquinay",
