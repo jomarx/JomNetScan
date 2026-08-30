@@ -116,7 +116,10 @@ async function arpTable() {
     const ip = ipMatch[1];
     const mac = normalizeMac(macMatch[0]);
     if (mac === 'ff:ff:ff:ff:ff:ff' || mac.startsWith('01:00:5e') || mac.startsWith('33:33')) continue;
-    if (ip.startsWith('224.') || ip.startsWith('239.') || ip.endsWith('.255')) continue;
+    // Multicast only. A trailing .255 is NOT a reliable broadcast test - on a
+    // /23 or /22, which this app scans, x.x.0.255 is an ordinary host. The
+    // caller already restricts results to real host addresses in its subnet.
+    if (ip.startsWith('224.') || ip.startsWith('239.')) continue;
     table.set(ip, mac);
   }
   return table;

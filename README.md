@@ -136,6 +136,17 @@ the sweep rather than after it, so it costs no extra wall time.
 A full /24 takes roughly 20–35 seconds, most of it spent spawning `ping`
 processes.
 
+The sweep runs 64 pings at a time with a 1 second deadline. Pushing the
+concurrency higher is a false economy: at 128 workers on a 500 ms deadline the
+processes starve each other and only 3 of 35 live devices answered in time,
+versus 33 at these settings — and the wider sweep was no faster. ARP still gets
+populated either way, since the ARP request goes out before the ICMP echo, but
+the reply is what distinguishes a live host from a stale cache entry.
+
+If the interface pinned in Settings disappears — Wi-Fi switched off, laptop
+docked — the scan falls back to whatever is connected rather than refusing to
+run, and the dropdown keeps showing the pinned adapter marked *not connected*.
+
 ## Known limits
 
 - **Windows only.** The scan shells out to `ping`, `arp`, `route`, and
@@ -144,6 +155,12 @@ processes.
   separate VLANs won't show up.
 - **Sleeping devices look offline.** A phone with its screen off often won't
   answer a ping. Devices are marked offline, never deleted.
+- **"Online" can lag reality by a minute or two.** Presence comes from the ARP
+  cache, because plenty of hosts drop ICMP and demanding a ping reply would
+  hide them. Windows keeps ARP entries for a short while after a device leaves,
+  so a departed device can linger. A **hollow** status dot means exactly that:
+  seen in the ARP table, but it never answered a ping this scan. A solid dot
+  means it replied.
 - **Randomized MACs.** Phones that rotate their MAC per network will appear as
   a new device when they rotate. There's no fix for this from outside the
   device; the app at least labels them so you know what you're looking at.

@@ -9,8 +9,11 @@ const DEFAULT_SETTINGS = {
   notifyOnNew: true,
   useNetbios: true,
   discoverNames: true,
-  pingTimeoutMs: 500,
-  concurrency: 128,
+  // Measured on a /24: 128 workers at a 500ms deadline detected 3 replies out
+  // of 35 devices, because that many concurrent ping.exe processes starve each
+  // other past the deadline. 64 at 1000ms detects 33 - and finishes sooner.
+  pingTimeoutMs: 1000,
+  concurrency: 64,
   interfaceName: null, // null = scan every scannable interface
   minimizeToTray: true,
 };
@@ -93,6 +96,7 @@ class Store {
           vendor: device.vendor || null,
           isGateway: !!device.isGateway,
           randomizedMac: !!device.randomizedMac,
+          respondedToPing: !!device.respondedToPing,
           isSelf: !!device.isSelf,
           notes: '',
           firstSeen: scanStartedAt,
@@ -114,6 +118,7 @@ class Store {
       existing.vendor = device.randomizedMac ? null : (device.vendor || existing.vendor);
       existing.isGateway = !!device.isGateway;
       existing.randomizedMac = !!device.randomizedMac;
+      existing.respondedToPing = !!device.respondedToPing;
       existing.isSelf = !!device.isSelf;
       existing.lastSeen = scanStartedAt;
       existing.online = true;
@@ -151,10 +156,17 @@ class Store {
    * hasn't already named. Returns the ones that changed.
    */
   adoptAnnounced(ids = null) {
+    const wanted = ids ? new Set(ids) : null;
     const targets = this.list().filter((d) => (
-      d.discoveredName && !d.name && (!ids || ids.includes(d.id))
+      d.discoveredName && !d.name && (!wanted || wanted.has(d.id))
     ));
-    for (const device of targets) this.rename(device.id, device.discoveredName);
+    // Same effect as calling rename() per device, but one write instead of N -
+    // rename() saves every time, and this runs over the whole list at once.
+    for (const device of targets) {
+      device.name = device.discoveredName;
+      device.acknowledged = true;
+    }
+    if (targets.length) this.saveDevices();
     return targets;
   }
 

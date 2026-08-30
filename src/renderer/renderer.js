@@ -115,7 +115,7 @@ function renderRows() {
     const nameClass = device.name ? 'name' : 'name unnamed';
 
     tr.innerHTML = `
-      <td><span class="dot ${device.online ? 'on' : ''}"></span></td>
+      <td><span class="dot ${device.online ? 'on' : ''}${device.online && !device.respondedToPing ? ' weak' : ''}" title="${device.online ? (device.respondedToPing ? 'Replied to ping' : 'Seen in the ARP table, no ping reply') : 'Offline'}"></span></td>
       <td>
         <div class="${nameClass}">${escapeHtml(displayName(device))}${tags.join('')}</div>
         ${secondary ? `<div class="sub">${escapeHtml(secondary)}</div>` : ''}
@@ -167,6 +167,7 @@ function renderDetail() {
     ['First seen', absoluteTime(device.firstSeen)],
     ['Last seen', absoluteTime(device.lastSeen)],
     ['Status', device.online ? 'Online' : 'Offline'],
+    ['Reachability', device.respondedToPing ? 'Replied to ping' : 'Seen in the ARP table only'],
   ];
   $('facts').innerHTML = facts
     .map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`)
@@ -202,21 +203,35 @@ function renderStatus() {
 
 function renderSettings() {
   const s = state.settings;
-  $('setAutoScan').checked = !!s.autoScan;
-  $('setInterval').value = s.intervalMinutes;
-  $('setNotify').checked = !!s.notifyOnNew;
-  $('setNetbios').checked = !!s.useNetbios;
-  $('setDiscover').checked = s.discoverNames !== false;
-  $('setTray').checked = !!s.minimizeToTray;
+  // A background scan pushes fresh state every few minutes, and this runs on
+  // every push. Rewriting the control the user is currently editing would
+  // throw away half-typed input, so leave the focused one alone.
+  const editing = (el) => el === document.activeElement;
+  const setChecked = (id, value) => { const el = $(id); if (!editing(el)) el.checked = value; };
+
+  setChecked('setAutoScan', !!s.autoScan);
+  setChecked('setNotify', !!s.notifyOnNew);
+  setChecked('setNetbios', !!s.useNetbios);
+  setChecked('setDiscover', s.discoverNames !== false);
+  setChecked('setTray', !!s.minimizeToTray);
+  if (!editing($('setInterval'))) $('setInterval').value = s.intervalMinutes;
 
   const select = $('setInterface');
+  const scannable = state.interfaces.filter((i) => i.scannable);
   const options = ['<option value="">All networks (auto)</option>'].concat(
-    state.interfaces
-      .filter((i) => i.scannable)
-      .map((i) => `<option value="${escapeHtml(i.name)}">${escapeHtml(`${i.name} - ${i.cidr}`)}</option>`),
+    scannable.map((i) => `<option value="${escapeHtml(i.name)}">${escapeHtml(`${i.name} - ${i.cidr}`)}</option>`),
   );
-  select.innerHTML = options.join('');
-  select.value = s.interfaceName || '';
+  // Keep a pinned adapter listed even while it is unplugged, otherwise the
+  // dropdown quietly reads "All networks (auto)" and the real setting is
+  // invisible - the value simply fails to match any option.
+  if (s.interfaceName && !scannable.some((i) => i.name === s.interfaceName)) {
+    options.push(`<option value="${escapeHtml(s.interfaceName)}">${escapeHtml(`${s.interfaceName} - not connected`)}</option>`);
+  }
+  const markup = options.join('');
+  if (!editing(select)) {
+    if (select.innerHTML !== markup) select.innerHTML = markup;
+    select.value = s.interfaceName || '';
+  }
 
   const entries = (state.oui && state.oui.entries) || 0;
   $('ouiStatus').textContent = entries

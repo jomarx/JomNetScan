@@ -20,10 +20,11 @@ let lastScan = null;
 let scanError = null;
 let quitting = false;
 
+// app.quit() is asynchronous, so a losing second instance can still reach
+// whenReady and open its own Store over the same devices.json. Everything that
+// touches state is gated on holding the lock.
 const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) {
-  app.quit();
-}
+if (!gotLock) app.quit();
 
 function ouiUserPath() {
   return path.join(app.getPath('userData'), 'oui.json');
@@ -157,9 +158,7 @@ function createWindow() {
   });
 }
 
-app.on('second-instance', showWindow);
-
-app.whenReady().then(() => {
+function start() {
   store = new Store(app.getPath('userData'));
   scanner = new Scanner();
   oui.load([ouiUserPath(), path.join(__dirname, '..', '..', 'data', 'oui.json')]);
@@ -188,7 +187,12 @@ app.whenReady().then(() => {
 
   rescheduleAutoScan();
   runScan('startup');
-});
+}
+
+if (gotLock) {
+  app.on('second-instance', showWindow);
+  app.whenReady().then(start);
+}
 
 app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', () => { /* tray keeps the app alive on Windows */ });

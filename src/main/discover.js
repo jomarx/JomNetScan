@@ -188,33 +188,58 @@ function mdnsScan({ interfaceAddress, timeoutMs = 6000 } = {}) {
   });
 }
 
-/** Fetch a UPnP device description and pull the name the vendor put in it. */
+function parseUpnpName(body) {
+  const friendly = /<friendlyName>([^<]+)<\/friendlyName>/i.exec(body);
+  const model = /<modelName>([^<]+)<\/modelName>/i.exec(body);
+  return (friendly && friendly[1].trim()) || (model && model[1].trim()) || null;
+}
+
+/**
+ * Fetch a UPnP device description and pull the name the vendor put in it.
+ *
+ * This promise must always settle. Callers await it inside a Promise.all that
+ * gates the whole scan, so one unresponsive device would otherwise hang
+ * scanning for the lifetime of the process. `req.destroy()` emits no 'error'
+ * of its own, so neither 'end' nor 'error' is guaranteed to fire once we tear
+ * the request down - hence the hard deadline below, which is the only path
+ * that cannot be skipped.
+ */
 function fetchUpnpName(location, timeoutMs = 3000) {
   return new Promise((resolve) => {
     let settled = false;
-    const done = (value) => { if (!settled) { settled = true; resolve(value); } };
+    let req = null;
+    let body = '';
+    const deadline = setTimeout(() => done(parseUpnpName(body)), timeoutMs * 2);
 
-    let req;
+    function done(value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      if (req && !req.destroyed) req.destroy();
+      resolve(value);
+    }
+
     try {
       req = http.get(location, { timeout: timeoutMs }, (res) => {
         if (res.statusCode !== 200) { res.resume(); done(null); return; }
-        let body = '';
         res.setEncoding('utf8');
+        // A truncated or aborted response still settles, with whatever we read.
+        res.on('error', () => done(parseUpnpName(body)));
+        res.on('aborted', () => done(parseUpnpName(body)));
+        res.on('close', () => done(parseUpnpName(body)));
         res.on('data', (chunk) => {
           body += chunk;
-          if (body.length > 64 * 1024) req.destroy(); // descriptions are small
+          // Descriptions are small, and the name sits near the top, so what we
+          // already have is worth parsing rather than discarding.
+          if (body.length > 64 * 1024) done(parseUpnpName(body));
         });
-        res.on('end', () => {
-          const friendly = /<friendlyName>([^<]+)<\/friendlyName>/i.exec(body);
-          const model = /<modelName>([^<]+)<\/modelName>/i.exec(body);
-          done((friendly && friendly[1].trim()) || (model && model[1].trim()) || null);
-        });
+        res.on('end', () => done(parseUpnpName(body)));
       });
     } catch {
       done(null);
       return;
     }
-    req.on('timeout', () => req.destroy());
+    req.on('timeout', () => done(parseUpnpName(body)));
     req.on('error', () => done(null));
   });
 }

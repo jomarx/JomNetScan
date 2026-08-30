@@ -121,6 +121,8 @@ textarea { resize: vertical; }
 .col-dot { width: 26px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--offline); display: inline-block; }
 .dot.on { background: var(--online); box-shadow: 0 0 0 3px rgba(62,207,142,0.15); }
+/* Present in the ARP table but it never answered a ping - weaker evidence. */
+.dot.on.weak { background: transparent; box-shadow: inset 0 0 0 2px var(--online); }
 
 .name { font-weight: 600; }
 .name.unnamed { font-weight: 500; color: var(--muted); font-style: italic; }
