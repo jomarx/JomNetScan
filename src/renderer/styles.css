@@ -175,3 +175,17 @@ textarea { resize: vertical; }
 .field input, .field select { margin-top: 6px; }
 .field input[type="number"] { width: 90px; display: inline-block; margin: 0 6px; }
 .hint { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
+
+/* Offer to take the name a device announced for itself. */
+.adopt { margin-left: auto; color: var(--accent); border-color: #2c3f57; }
+.adopt:hover:not(:disabled) { background: #1b2938; border-color: var(--accent); }
+.adopt-one {
+  margin-top: 8px;
+  width: 100%;
+  text-align: left;
+  color: var(--accent);
+  border-color: #2c3f57;
+  font-size: 13px;
+}
+.adopt-one:hover:not(:disabled) { background: #1b2938; border-color: var(--accent); }
+.adopt[hidden], .adopt-one[hidden] { display: none; }

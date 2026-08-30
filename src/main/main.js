@@ -9,6 +9,7 @@ const { Store } = require('./store.js');
 const { Scanner } = require('./scanner.js');
 const net = require('./net.js');
 const oui = require('./oui.js');
+const discover = require('./discover.js');
 
 let mainWindow = null;
 let tray = null;
@@ -174,6 +175,17 @@ app.whenReady().then(() => {
   scanner = new Scanner();
   oui.load([ouiUserPath(), path.join(__dirname, '..', '..', 'data', 'oui.json')]);
 
+  // Earlier builds stored service identifiers as announced names, and a merge
+  // keeps the last one it saw. Drop anything the current filter would reject.
+  let dropped = 0;
+  for (const device of store.list()) {
+    if (device.discoveredName && discover.looksLikeIdentifier(device.discoveredName)) {
+      device.discoveredName = null;
+      dropped += 1;
+    }
+  }
+  if (dropped) store.saveDevices();
+
   scanner.on('progress', (payload) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scan:progress', payload);
@@ -213,6 +225,12 @@ ipcMain.handle('device:notes', (_e, { id, notes }) => {
 
 ipcMain.handle('device:acknowledge', (_e, { ids }) => {
   store.acknowledge(ids || []);
+  pushState();
+  return buildState();
+});
+
+ipcMain.handle('device:adoptAnnounced', (_e, { ids }) => {
+  store.adoptAnnounced(ids || null);
   pushState();
   return buildState();
 });

@@ -75,6 +75,24 @@ function parseTxt(data) {
   return out;
 }
 
+/**
+ * Some services advertise an instance that is really an identifier:
+ * "nearby presence nsd e2c3cf16 3a26 4c08 a847". Adopting one of those as a
+ * device name is worse than leaving the field blank.
+ */
+function looksLikeIdentifier(label) {
+  if (!label) return true;
+  const tokens = label.split(/[\s._-]+/).filter(Boolean);
+  // Model numbers like "AC750" are accidentally all-hex, so one or two of these
+  // prove nothing. Three or more means we are looking at an id.
+  const hexTokens = tokens.filter((t) => /^[0-9a-f]{4,}$/i.test(t));
+  if (hexTokens.length >= 3) return true;
+  // A punctuated UUID. The separators have to be there: an unbroken hex run is
+  // just a serial number glued to a model name, and tidyLabel strips those.
+  if (/[0-9a-f]{8}[\s._-]([0-9a-f]{4}[\s._-]){3}[0-9a-f]{8,}/i.test(label)) return true;
+  return false;
+}
+
 function isUsefulName(name) {
   if (!name) return false;
   const trimmed = name.trim();
@@ -155,10 +173,13 @@ function mdnsScan({ interfaceAddress, timeoutMs = 6000 } = {}) {
         // Chromecast and friends put the name the owner actually chose in TXT "fn".
         const txt = txtRecords.get(instance) || {};
         const friendly = txt.fn || txt.n || txt.name;
-        claim(ip, isUsefulName(friendly) ? friendly.trim() : tidyLabel(instanceLabel(instance)), 'mdns-service');
+        const raw = instanceLabel(instance);
+        const fallback = looksLikeIdentifier(raw) ? null : tidyLabel(raw);
+        claim(ip, isUsefulName(friendly) ? friendly.trim() : fallback, 'mdns-service');
       }
       for (const host of hostnames) {
         const label = unescapeLabel(host.replace(/\.local\.?$/i, ''));
+        if (looksLikeIdentifier(label)) continue;
         claim(aRecords.get(host.toLowerCase()), tidyLabel(label), 'mdns-host');
       }
 
@@ -260,4 +281,7 @@ async function discoverNames({ interfaceAddress, timeoutMs = 6000 } = {}) {
   return merged;
 }
 
-module.exports = { discoverNames, mdnsScan, ssdpScan, isUsefulName, instanceLabel, unescapeLabel };
+module.exports = {
+  discoverNames, mdnsScan, ssdpScan, isUsefulName, looksLikeIdentifier,
+  instanceLabel, tidyLabel, unescapeLabel,
+};

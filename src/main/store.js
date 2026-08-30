@@ -146,6 +146,18 @@ class Store {
     return device;
   }
 
+  /**
+   * Take the names devices announced for themselves, for every device the user
+   * hasn't already named. Returns the ones that changed.
+   */
+  adoptAnnounced(ids = null) {
+    const targets = this.list().filter((d) => (
+      d.discoveredName && !d.name && (!ids || ids.includes(d.id))
+    ));
+    for (const device of targets) this.rename(device.id, device.discoveredName);
+    return targets;
+  }
+
   acknowledge(ids) {
     for (const id of ids) {
       if (this.devices[id]) this.devices[id].acknowledged = true;

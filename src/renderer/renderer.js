@@ -61,6 +61,20 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => map[ch]);
 }
 
+/** Devices that announced a name the user hasn't overridden with one of their own. */
+function adoptable() {
+  return state.devices.filter((d) => d.discoveredName && !d.name);
+}
+
+function renderAdoptAll() {
+  const pending = adoptable();
+  const btn = $('adoptAllBtn');
+  btn.hidden = pending.length === 0;
+  btn.textContent = pending.length === 1
+    ? 'Adopt 1 announced name'
+    : `Adopt ${pending.length} announced names`;
+}
+
 function renderStats() {
   const total = state.devices.length;
   const online = state.devices.filter((d) => d.online).length;
@@ -92,9 +106,12 @@ function renderRows() {
     if (device.randomizedMac) tags.push('<span class="badge tag">Random MAC</span>');
     if (!device.name && device.discoveredName) tags.push('<span class="badge tag">Announced</span>');
 
+    // Don't echo the announced name underneath itself once it has been adopted.
+    const announcedDiffers = device.discoveredName && device.discoveredName !== device.name;
     const secondary = device.notes
-      || (device.name ? (device.discoveredName || device.hostname || '') : '')
-      || (device.discoveredName ? device.hostname || '' : '');
+      || (device.name ? (announcedDiffers ? device.discoveredName : device.hostname) : '')
+      || (device.discoveredName ? device.hostname : '')
+      || '';
     const nameClass = device.name ? 'name' : 'name unnamed';
 
     tr.innerHTML = `
@@ -135,6 +152,11 @@ function renderDetail() {
   $('detailSub').textContent = `${device.ip} - ${device.online ? 'online' : `last seen ${relativeTime(device.lastSeen)}`}`;
   $('nameInput').value = device.name || '';
   $('notesInput').value = device.notes || '';
+
+  const adoptOne = $('adoptOneBtn');
+  const announced = device.discoveredName;
+  adoptOne.hidden = !announced || announced === device.name;
+  if (announced) adoptOne.textContent = `Use announced name: "${announced}"`;
 
   const facts = [
     ['MAC address', device.mac || 'not available'],
@@ -204,6 +226,7 @@ function renderSettings() {
 
 function render() {
   renderStats();
+  renderAdoptAll();
   renderRows();
   renderDetail();
   renderStatus();
@@ -235,6 +258,16 @@ $('filters').addEventListener('click', (e) => {
   filter = chip.dataset.filter;
   for (const c of $('filters').children) c.classList.toggle('active', c === chip);
   renderRows();
+});
+
+$('adoptAllBtn').addEventListener('click', async () => {
+  applyState(await api.adoptAnnounced(adoptable().map((d) => d.id)));
+});
+
+$('adoptOneBtn').addEventListener('click', async () => {
+  const device = state.devices.find((d) => d.id === selectedId);
+  if (!device || !device.discoveredName) return;
+  applyState(await api.rename(device.id, device.discoveredName));
 });
 
 $('detailClose').addEventListener('click', () => select(null));
