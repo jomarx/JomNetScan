@@ -157,6 +157,24 @@ processes.
 `oui.json`. **Settings → Open data folder** takes you there. Deleting
 `devices.json` resets the app; everything is then "new" again.
 
+## The icon
+
+Generated rather than committed as an opaque blob, so it can be adjusted by
+editing numbers instead of opening an editor:
+
+```bash
+npm run make-icon
+```
+
+That writes `build/icon.ico` (16 through 256 px, for the exe and installer),
+`src/assets/tray.png` (tray) and `src/assets/icon.png` (window icon for dev
+runs). It uses no image libraries — a PNG is a header, a deflate stream and a
+CRC, and an ICO is a table of PNGs.
+
+At 20 px and below the design drops its inner ring and thickens what's left.
+The full two-ring version turns to mush at 16 px, which is exactly the size the
+taskbar and tray use.
+
 ## Layout
 
 ```
@@ -166,6 +184,7 @@ src/main/store.js     devices.json + settings.json, atomic writes
 src/main/oui.js       MAC vendor lookup and IEEE registry download
 src/main/discover.js  mDNS and SSDP name discovery
 src/main/main.js      window, tray, notifications, IPC
+src/assets/           generated tray and window icons
 src/preload/          the narrow API the UI is allowed to call
 src/renderer/         the UI (plain HTML/CSS/JS, no framework)
 ```

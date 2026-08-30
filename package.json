@@ -10,7 +10,8 @@
   "scripts": {
     "start": "electron .",
     "update-oui": "node scripts/update-oui.js",
-    "dist": "electron-builder --win --publish never"
+    "dist": "electron-builder --win --publish never",
+    "make-icon": "node scripts/make-icon.js"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -28,11 +29,15 @@
       "target": [
         "nsis",
         "portable"
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
     }
   },
   "dependencies": {
