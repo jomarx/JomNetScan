@@ -17,8 +17,28 @@ function displayName(device) {
   return device.name || device.discoveredName || device.hostname || device.vendor || device.ip;
 }
 
+/** How long this device has been on the list, in ms. */
+function newAgeMs(device) {
+  const firstSeen = Date.parse(device.firstSeen);
+  return Number.isFinite(firstSeen) ? Date.now() - firstSeen : Infinity;
+}
+
+function newWindowMs() {
+  // The main process owns this value; fall back only if state hasn't arrived.
+  return state.newBadgeMs || 60 * 60 * 1000;
+}
+
 function isNew(device) {
-  return !device.acknowledged;
+  if (device.acknowledged) return false;
+  // Applied here as well as in the main process so the badge goes at the right
+  // minute rather than waiting for the next state push.
+  return newAgeMs(device) < newWindowMs();
+}
+
+/** "New · 12m" - counts up to the point the badge retires itself. */
+function newBadgeLabel(device) {
+  const minutes = Math.floor(newAgeMs(device) / 60000);
+  return minutes < 1 ? 'New · now' : `New · ${minutes}m`;
 }
 
 function relativeTime(iso) {
@@ -151,7 +171,7 @@ function renderRows() {
     if (device.id === selectedId) tr.classList.add('selected');
 
     const tags = [];
-    if (isNew(device)) tags.push('<span class="badge new">New</span>');
+    if (isNew(device)) tags.push(`<span class="badge new" title="First seen ${absoluteTime(device.firstSeen)}">${escapeHtml(newBadgeLabel(device))}</span>`);
     if (device.isGateway) tags.push('<span class="badge tag">Router</span>');
     if (device.isSelf) tags.push('<span class="badge tag">This PC</span>');
     if (device.randomizedMac) tags.push('<span class="badge tag">Random MAC</span>');
@@ -422,5 +442,10 @@ api.onProgress(({ phase, done, total }) => {
 api.onState(applyState);
 api.getState().then(applyState);
 
-// Keep the "3 min ago" column honest between scans.
-setInterval(() => { if (!state.scanning) renderRows(); }, 30000);
+// Keep the "3 min ago" column and the New badge's age counter honest between
+// scans - the badge count also drops on its own as badges age out.
+setInterval(() => {
+  if (state.scanning) return;
+  renderRows();
+  renderStats();
+}, 30000);

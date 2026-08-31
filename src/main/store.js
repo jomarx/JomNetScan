@@ -3,6 +3,11 @@
 const fs = require('fs');
 const path = require('path');
 
+// How long a device stays flagged New after it is first seen. The badge counts
+// up towards this, then clears itself - an alert nobody can dismiss stops being
+// an alert. Naming a device still clears it immediately.
+const NEW_BADGE_MS = 60 * 60 * 1000;
+
 const DEFAULT_SETTINGS = {
   autoScan: true,
   intervalMinutes: 5,
@@ -188,6 +193,26 @@ class Store {
     return targets;
   }
 
+  /**
+   * Retire the New flag on anything first seen longer than NEW_BADGE_MS ago.
+   * Returns how many changed, so the caller can skip a pointless state push.
+   */
+  expireNewFlags(now = Date.now()) {
+    let changed = 0;
+    for (const device of Object.values(this.devices)) {
+      if (device.acknowledged) continue;
+      const firstSeen = Date.parse(device.firstSeen);
+      // An unparseable timestamp is treated as old, so a bad record can't leave
+      // a badge stuck on screen forever.
+      if (!Number.isFinite(firstSeen) || now - firstSeen >= NEW_BADGE_MS) {
+        device.acknowledged = true;
+        changed += 1;
+      }
+    }
+    if (changed) this.saveDevices();
+    return changed;
+  }
+
   acknowledge(ids) {
     for (const id of ids) {
       if (this.devices[id]) this.devices[id].acknowledged = true;
@@ -203,4 +228,4 @@ class Store {
   }
 }
 
-module.exports = { Store, DEFAULT_SETTINGS };
+module.exports = { Store, DEFAULT_SETTINGS, NEW_BADGE_MS };

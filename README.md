@@ -15,8 +15,9 @@ Think Fing, minus the account, the cloud, and the upsell.
 - **Asks the network for names** — devices that speak mDNS or UPnP already
   publish a name their owner chose. Those show up on their own, and one button
   adopts the lot.
-- **Flags new arrivals** — anything you haven't named yet is badged **New** and
-  sorted to the top. Optional desktop notification when one turns up.
+- **Flags new arrivals** — a device that turns up is badged **New · 12m**,
+  counting how long it has been on the list, and sorted to the top. Optional
+  desktop notification when one appears.
 - **Runs quietly** — rescans on a timer, lives in the system tray.
 - **Keeps your data local** — one JSON file in your user profile. Discovery and
   scanning stay on your LAN; the only thing that reaches the internet is the
@@ -67,6 +68,25 @@ bundled — no guessed data ships in this repo. Grab it either way:
 Until then the Vendor column stays blank, except for randomized MACs, which are
 detected from the address itself — modern phones rotate these, which is why the
 same handset can reappear as a "new" device.
+
+## The New badge
+
+A device you haven't named is badged **New**, with a counter showing how long
+it has been on the list — `New · now`, `New · 12m`, `New · 59m`. After an hour
+the badge retires itself and the device becomes an ordinary row.
+
+Naming it clears the badge immediately, whatever its age.
+
+The hour is deliberate. A badge that never goes away stops being an alert: with
+thirty permanently-flagged rows you learn to ignore the colour, and a device
+that genuinely appeared five minutes ago looks exactly like one from last week.
+The counter is there so you can tell those apart at a glance.
+
+Expiry runs in the main process — on startup, after every scan, and on a
+one-minute tick so badges still age out with auto-scan switched off. The window
+lives in one constant (`NEW_BADGE_MS` in `src/main/store.js`) that the UI is
+handed in its state, so the badge, the **Unnamed / new** count and the tray
+tooltip can't drift apart.
 
 ## Sorting and filtering
 

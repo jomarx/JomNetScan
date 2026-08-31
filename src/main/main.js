@@ -5,7 +5,7 @@ const {
   app, BrowserWindow, ipcMain, Notification, Tray, Menu, shell, nativeImage,
 } = require('electron');
 
-const { Store } = require('./store.js');
+const { Store, NEW_BADGE_MS } = require('./store.js');
 const { Scanner } = require('./scanner.js');
 const net = require('./net.js');
 const oui = require('./oui.js');
@@ -39,6 +39,7 @@ function buildState() {
     lastScan,
     scanError,
     oui: oui.stats(),
+    newBadgeMs: NEW_BADGE_MS,
   };
 }
 
@@ -81,6 +82,7 @@ async function runScan(trigger) {
   try {
     const result = await scanner.scan(store.getSettings());
     const newDevices = store.merge(result.devices, result.startedAt);
+    store.expireNewFlags();
     lastScan = {
       at: result.finishedAt,
       trigger,
@@ -184,6 +186,11 @@ function start() {
   tray = new Tray(trayIcon());
   tray.on('double-click', showWindow);
   updateTray();
+
+  // Badges age out on their own clock, not the scan clock - otherwise turning
+  // auto-scan off would leave them on screen indefinitely.
+  store.expireNewFlags();
+  setInterval(() => { if (store.expireNewFlags()) pushState(); }, 60 * 1000);
 
   rescheduleAutoScan();
   runScan('startup');
