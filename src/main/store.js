@@ -213,6 +213,15 @@ class Store {
     return changed;
   }
 
+  /** Record the result of an on-demand port scan for one device. */
+  setPorts(id, result) {
+    const device = this.devices[id];
+    if (!device) return null;
+    device.ports = result;
+    this.saveDevices();
+    return device;
+  }
+
   acknowledge(ids) {
     for (const id of ids) {
       if (this.devices[id]) this.devices[id].acknowledged = true;

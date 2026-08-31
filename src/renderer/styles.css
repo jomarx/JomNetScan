@@ -205,3 +205,15 @@ textarea { resize: vertical; }
 .devices th[data-sort][data-dir] { color: var(--accent); }
 .devices th[data-sort][data-dir="1"]::after { content: '\25B2'; opacity: 1; }
 .devices th[data-sort][data-dir="-1"]::after { content: '\25BC'; opacity: 1; }
+
+/* On-demand port scan, in the device detail panel. */
+.ports-btn { width: 100%; margin-top: 18px; }
+.ports-result { margin-top: 10px; font-size: 12.5px; }
+.ports-result .port-row {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 5px 0; border-bottom: 1px solid #1d212a;
+}
+.ports-result .port-num { font-family: Consolas, "Cascadia Mono", monospace; color: var(--accent); }
+.ports-result .port-service { color: var(--muted); text-align: right; }
+.ports-result .ports-none { color: var(--online); }
+.ports-result .ports-when { color: var(--muted); font-size: 11px; margin-top: 8px; }

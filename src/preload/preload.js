@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('jomnet', {
   acknowledge: (ids) => ipcRenderer.invoke('device:acknowledge', { ids }),
   adoptAnnounced: (ids) => ipcRenderer.invoke('device:adoptAnnounced', { ids }),
   forget: (id) => ipcRenderer.invoke('device:forget', { id }),
+  scanPorts: (id) => ipcRenderer.invoke('ports:scan', { id }),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
   downloadOui: () => ipcRenderer.invoke('oui:download'),
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
@@ -21,6 +22,11 @@ contextBridge.exposeInMainWorld('jomnet', {
     const handler = (_e, payload) => cb(payload);
     ipcRenderer.on('scan:progress', handler);
     return () => ipcRenderer.removeListener('scan:progress', handler);
+  },
+  onPortProgress: (cb) => {
+    const handler = (_e, payload) => cb(payload);
+    ipcRenderer.on('ports:progress', handler);
+    return () => ipcRenderer.removeListener('ports:progress', handler);
   },
   onState: (cb) => {
     const handler = (_e, payload) => cb(payload);

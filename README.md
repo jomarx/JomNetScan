@@ -88,6 +88,32 @@ lives in one constant (`NEW_BADGE_MS` in `src/main/store.js`) that the UI is
 handed in its state, so the badge, the **Unnamed / new** count and the tray
 tooltip can't drift apart.
 
+## Checking a device's open ports
+
+Select a device and click **Scan for open ports**. It tries a TCP connect
+against ~37 ports a home network actually runs something on — SSH, HTTP, SMB,
+RTSP, MQTT, Chromecast, Plex, printer ports and so on — and lists whatever
+answers, with what the port usually means. It takes a couple of seconds, and
+the result is saved against the device so it's still there next time.
+
+This is what tells you what a mystery box is *for*. A bare `Espressif Inc.` row
+answering on 8123 is Home Assistant; one answering on 9100 is a print server; a
+camera usually shows 554.
+
+Deliberate limits:
+
+- **On request only, one device at a time.** It is never part of a normal scan.
+  Sweeping every port of every device on a timer is slow, noisy, and looks
+  exactly like the thing an intrusion detector exists to complain about.
+- **Only devices already in your list.** The scan is addressed by stored device
+  id, so there is no way to point it at an arbitrary host from the UI.
+- **Common ports, not all 65535.** The curated list is in
+  `src/main/ports.js` if you want to add to it.
+
+An open port is not by itself a problem — your router answering on 80 and 443
+is just its admin page. It's worth a look when a device you can't account for
+is listening for connections.
+
 ## Sorting and filtering
 
 Click a column header to sort by it — **Device**, **IP address**, **MAC**,

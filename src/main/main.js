@@ -10,6 +10,7 @@ const { Scanner } = require('./scanner.js');
 const net = require('./net.js');
 const oui = require('./oui.js');
 const discover = require('./discover.js');
+const ports = require('./ports.js');
 
 let mainWindow = null;
 let tray = null;
@@ -19,6 +20,7 @@ let scanTimer = null;
 let lastScan = null;
 let scanError = null;
 let quitting = false;
+let portScanning = null; // device id whose ports are being scanned right now
 
 // app.quit() is asynchronous, so a losing second instance can still reach
 // whenReady and open its own Store over the same devices.json. Everything that
@@ -40,6 +42,7 @@ function buildState() {
     scanError,
     oui: oui.stats(),
     newBadgeMs: NEW_BADGE_MS,
+    portScanning,
   };
 }
 
@@ -238,6 +241,34 @@ ipcMain.handle('device:acknowledge', (_e, { ids }) => {
 ipcMain.handle('device:adoptAnnounced', (_e, { ids }) => {
   store.adoptAnnounced(ids || null);
   pushState();
+  return buildState();
+});
+
+/**
+ * Port scans only ever run against a device already in the list, addressed by
+ * its stored id - there is no way to point this at an arbitrary host from the
+ * UI. One at a time, on request, never as part of a sweep.
+ */
+ipcMain.handle('ports:scan', async (_e, { id }) => {
+  const device = store.get(id);
+  if (!device || portScanning) return buildState();
+  portScanning = id;
+  pushState();
+  try {
+    const open = await ports.scanPorts(device.ip, {
+      onProgress: (done, total) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ports:progress', { id, done, total });
+        }
+      },
+    });
+    store.setPorts(id, { scannedAt: new Date().toISOString(), open });
+  } catch (err) {
+    store.setPorts(id, { scannedAt: new Date().toISOString(), open: [], error: err.message });
+  } finally {
+    portScanning = null;
+    pushState();
+  }
   return buildState();
 });
 

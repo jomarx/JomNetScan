@@ -8,6 +8,7 @@ let query = '';
 let selectedId = null;
 // key null = the default grouping (new first, then online, then address).
 let sort = { key: null, dir: 1 };
+let portProgress = null; // live text while a port scan runs
 
 const $ = (id) => document.getElementById(id);
 
@@ -246,6 +247,36 @@ function renderDetail() {
   $('facts').innerHTML = facts
     .map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`)
     .join('');
+
+  renderPorts(device);
+}
+
+function renderPorts(device) {
+  const btn = $('portsBtn');
+  const box = $('portsResult');
+  const busy = state.portScanning === device.id;
+  // One scan at a time, so the button is dead on other devices while one runs.
+  btn.disabled = !!state.portScanning;
+  btn.textContent = busy ? (portProgress || 'Scanning ports...') : 'Scan for open ports';
+
+  const result = device.ports;
+  if (busy || !result) {
+    if (!result) box.innerHTML = '';
+    return;
+  }
+
+  if (result.error) {
+    box.innerHTML = `<div class="ports-when">Scan failed: ${escapeHtml(result.error)}</div>`;
+    return;
+  }
+
+  const rows = result.open.length
+    ? result.open
+      .map((p) => `<div class="port-row"><span class="port-num">${p.port}</span><span class="port-service">${escapeHtml(p.service)}</span></div>`)
+      .join('')
+    : '<div class="ports-none">No common ports open.</div>';
+
+  box.innerHTML = `${rows}<div class="ports-when">Scanned ${escapeHtml(absoluteTime(result.scannedAt))}</div>`;
 }
 
 function renderStatus() {
@@ -437,6 +468,20 @@ api.onProgress(({ phase, done, total }) => {
   const labels = { ping: 'Pinging the subnet', arp: 'Reading the ARP table', names: 'Resolving names', discover: 'Listening for announcements' };
   $('status').className = 'status';
   $('status').textContent = `${labels[phase] || phase} ${done}/${total}`;
+});
+
+$('portsBtn').addEventListener('click', async () => {
+  if (!selectedId || state.portScanning) return;
+  portProgress = null;
+  applyState(await api.scanPorts(selectedId));
+  portProgress = null;
+  renderDetail();
+});
+
+api.onPortProgress(({ id, done, total }) => {
+  if (id !== selectedId) return;
+  portProgress = `Scanning ports ${done}/${total}`;
+  $('portsBtn').textContent = portProgress;
 });
 
 api.onState(applyState);
