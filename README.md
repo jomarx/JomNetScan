@@ -88,6 +88,23 @@ lives in one constant (`NEW_BADGE_MS` in `src/main/store.js`) that the UI is
 handed in its state, so the badge, the **Unnamed / new** count and the tray
 tooltip can't drift apart.
 
+## Pinging a device
+
+Select a device and click **Ping this device**. It sends one ping a second and
+draws the round-trip times as they arrive, with **min / avg / max / loss**
+underneath. Click again to stop; it stops on its own after two minutes.
+
+Dropped pings are drawn as red ticks along the bottom and break the line, so
+packet loss looks like packet loss rather than like missing data. The vertical
+scale never goes below 10 ms, otherwise an idle LAN renders as a mountain
+range of sub-millisecond noise.
+
+This is the tool for "the Wi-Fi feels bad" — a flat line near zero says the
+link is fine, a sawtooth or a run of red ticks says it isn't.
+
+Samples are live only. They're a diagnostic, not history, so they aren't
+written to disk and they reset when you start a new run.
+
 ## Checking a device's open ports
 
 Select a device and click **Scan for open ports**. It tries a TCP connect

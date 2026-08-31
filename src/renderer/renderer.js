@@ -9,6 +9,8 @@ let selectedId = null;
 // key null = the default grouping (new first, then online, then address).
 let sort = { key: null, dir: 1 };
 let portProgress = null; // live text while a port scan runs
+// Live ping samples are a diagnostic, not saved state - they live only here.
+let pingSamples = { id: null, list: [] };
 
 const $ = (id) => document.getElementById(id);
 
@@ -248,7 +250,78 @@ function renderDetail() {
     .map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`)
     .join('');
 
+  renderPing(device);
   renderPorts(device);
+}
+
+/**
+ * Latency sparkline. Replies are a line; dropped pings are a red tick on the
+ * floor, so a gap in the line reads as loss rather than as missing data.
+ */
+function pingGraphSvg(samples) {
+  const W = 300;
+  const H = 72;
+  const pad = 4;
+  const replies = samples.filter((s) => s.ok);
+  // Never scale below 10ms, or an idle LAN looks like a mountain range.
+  const peak = Math.max(10, ...replies.map((s) => s.ms));
+  const step = samples.length > 1 ? (W - pad * 2) / (samples.length - 1) : 0;
+  const x = (i) => pad + i * step;
+  const y = (ms) => H - pad - (ms / peak) * (H - pad * 2);
+
+  // Break the line wherever a ping was lost.
+  const runs = [];
+  let run = [];
+  samples.forEach((s, i) => {
+    if (s.ok) run.push(`${x(i).toFixed(1)},${y(s.ms).toFixed(1)}`);
+    else if (run.length) { runs.push(run); run = []; }
+  });
+  if (run.length) runs.push(run);
+
+  const lines = runs
+    .filter((r) => r.length > 1)
+    .map((r) => `<polyline fill="none" stroke="#5aa9ff" stroke-width="1.5" points="${r.join(' ')}" />`)
+    .join('');
+  const dots = runs
+    .filter((r) => r.length === 1)
+    .map((r) => { const [cx, cy] = r[0].split(','); return `<circle cx="${cx}" cy="${cy}" r="1.8" fill="#5aa9ff" />`; })
+    .join('');
+  const drops = samples
+    .map((s, i) => (s.ok ? '' : `<rect x="${(x(i) - 1).toFixed(1)}" y="${H - pad - 8}" width="2" height="8" fill="#ff6b6b" />`))
+    .join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Ping latency">
+    <line x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}" stroke="#2a2f3a" stroke-width="1" />
+    ${lines}${dots}${drops}
+    <text x="${pad + 2}" y="12" fill="#8d94a5" font-size="9">${peak} ms</text>
+  </svg>`;
+}
+
+function renderPing(device) {
+  const btn = $('pingBtn');
+  const panel = $('pingPanel');
+  const running = state.pinging === device.id;
+
+  btn.textContent = running ? 'Stop pinging' : 'Ping this device';
+  btn.disabled = !!state.pinging && !running;
+
+  const samples = pingSamples.id === device.id ? pingSamples.list : [];
+  panel.hidden = samples.length === 0;
+  if (!samples.length) return;
+
+  $('pingGraph').innerHTML = pingGraphSvg(samples);
+
+  const replies = samples.filter((s) => s.ok).map((s) => s.ms);
+  const lost = samples.length - replies.length;
+  const lossPct = Math.round((lost / samples.length) * 100);
+  const avg = replies.length ? Math.round(replies.reduce((a, b) => a + b, 0) / replies.length) : null;
+  $('pingStats').innerHTML = [
+    `<span>sent <b>${samples.length}</b></span>`,
+    `<span>min <b>${replies.length ? Math.min(...replies) : '-'}</b> ms</span>`,
+    `<span>avg <b>${avg === null ? '-' : avg}</b> ms</span>`,
+    `<span>max <b>${replies.length ? Math.max(...replies) : '-'}</b> ms</span>`,
+    `<span class="${lossPct ? 'loss-bad' : ''}">loss <b>${lossPct}%</b></span>`,
+  ].join('');
 }
 
 function renderPorts(device) {
@@ -468,6 +541,23 @@ api.onProgress(({ phase, done, total }) => {
   const labels = { ping: 'Pinging the subnet', arp: 'Reading the ARP table', names: 'Resolving names', discover: 'Listening for announcements' };
   $('status').className = 'status';
   $('status').textContent = `${labels[phase] || phase} ${done}/${total}`;
+});
+
+$('pingBtn').addEventListener('click', async () => {
+  if (!selectedId) return;
+  if (state.pinging === selectedId) {
+    applyState(await api.stopPing());
+    return;
+  }
+  // Starting on a different device begins a fresh series.
+  pingSamples = { id: selectedId, list: [] };
+  applyState(await api.startPing(selectedId));
+});
+
+api.onPingSample(({ id, ok, ms }) => {
+  if (id !== pingSamples.id) return;
+  pingSamples.list.push({ ok, ms });
+  if (id === selectedId) renderDetail();
 });
 
 $('portsBtn').addEventListener('click', async () => {

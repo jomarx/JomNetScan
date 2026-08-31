@@ -21,6 +21,11 @@ let lastScan = null;
 let scanError = null;
 let quitting = false;
 let portScanning = null; // device id whose ports are being scanned right now
+let pingSession = null;  // { id, cancelled } for the live ping graph
+
+// Two minutes of samples is plenty to spot a flaky link, and bounds a session
+// that the user walks away from.
+const PING_SESSION_MAX = 120;
 
 // app.quit() is asynchronous, so a losing second instance can still reach
 // whenReady and open its own Store over the same devices.json. Everything that
@@ -43,6 +48,7 @@ function buildState() {
     oui: oui.stats(),
     newBadgeMs: NEW_BADGE_MS,
     portScanning,
+    pinging: pingSession ? pingSession.id : null,
   };
 }
 
@@ -148,6 +154,9 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+
+  // A hidden window can't show a graph; don't keep pinging into the void.
+  mainWindow.on('close', () => { if (pingSession) { pingSession.cancelled = true; pingSession = null; } });
 
   mainWindow.on('close', (e) => {
     if (!quitting && store.getSettings().minimizeToTray) {
@@ -269,6 +278,47 @@ ipcMain.handle('ports:scan', async (_e, { id }) => {
     portScanning = null;
     pushState();
   }
+  return buildState();
+});
+
+/**
+ * A live ping session against one device: one ping a second, streamed to the
+ * UI as it goes, until it is stopped or hits the cap. Only one runs at a time,
+ * and like the port scan it is addressed by stored device id.
+ */
+ipcMain.handle('ping:start', async (_e, { id }) => {
+  const device = store.get(id);
+  if (!device) return buildState();
+  if (pingSession) pingSession.cancelled = true;
+
+  const session = { id, cancelled: false };
+  pingSession = session;
+  pushState();
+
+  (async () => {
+    for (let seq = 1; seq <= PING_SESSION_MAX && !session.cancelled; seq += 1) {
+      const result = await net.pingOnce(device.ip);
+      if (session.cancelled) break;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ping:sample', { id, seq, ok: result.ok, ms: result.ms });
+      }
+      // One a second, so the graph reads as a timeline rather than a burst.
+      const gap = Math.max(0, 1000 - (result.ok ? result.ms : 0));
+      await new Promise((r) => setTimeout(r, gap));
+    }
+    if (pingSession === session) {
+      pingSession = null;
+      pushState();
+    }
+  })();
+
+  return buildState();
+});
+
+ipcMain.handle('ping:stop', () => {
+  if (pingSession) pingSession.cancelled = true;
+  pingSession = null;
+  pushState();
   return buildState();
 });
 

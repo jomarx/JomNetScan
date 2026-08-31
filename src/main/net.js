@@ -105,6 +105,19 @@ async function pingSweep(hosts, { concurrency = 64, timeoutMs = 500, onProgress 
   return alive;
 }
 
+/**
+ * A single ping, with its round-trip time. `ms` is null when nothing came back.
+ * Windows prints "time=2ms" or "time<1ms"; the second means sub-millisecond,
+ * so it is reported as 0 rather than 1.
+ */
+async function pingOnce(ip, timeoutMs = 1000) {
+  const stdout = await run('ping', ['-n', '1', '-w', String(timeoutMs), ip], timeoutMs + 2000);
+  if (!/ttl[=<]/i.test(stdout)) return { ok: false, ms: null };
+  const m = /time([=<])\s*(\d+)\s*ms/i.exec(stdout);
+  if (!m) return { ok: true, ms: 0 };
+  return { ok: true, ms: m[1] === '<' ? 0 : Number(m[2]) };
+}
+
 /** Parse the Windows ARP cache into ip -> mac, dropping multicast and broadcast rows. */
 async function arpTable() {
   const stdout = await run('arp', ['-a'], 8000);
@@ -165,6 +178,7 @@ module.exports = {
   listInterfaces,
   hostsFor,
   pingSweep,
+  pingOnce,
   arpTable,
   defaultGateways,
   reverseDns,
