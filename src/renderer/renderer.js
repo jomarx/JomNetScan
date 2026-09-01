@@ -61,9 +61,15 @@ function ipSortKey(ip) {
   return ip.split('.').reduce((acc, part) => acc * 256 + Number(part), 0);
 }
 
-/** Something online is "just seen", so it sorts ahead of every timestamp. */
+/**
+ * Something online is "just seen", so it sorts ahead of every timestamp.
+ *
+ * Finite on purpose: Infinity would make two online devices subtract to NaN,
+ * and the sort would then only work by accident, because NaN happens to be
+ * falsy and fall through to the tiebreak below.
+ */
 function recency(device) {
-  if (device.online) return Infinity;
+  if (device.online) return Number.MAX_SAFE_INTEGER;
   const t = Date.parse(device.lastSeen);
   return Number.isNaN(t) ? 0 : t;
 }
@@ -428,6 +434,12 @@ function render() {
 }
 
 function select(id) {
+  // Stop a ping when leaving the device it belongs to. The Stop control lives
+  // in that device's panel, so a session left running has no visible way out
+  // while it holds every other device's Ping button disabled.
+  if (state.pinging && state.pinging !== id) {
+    api.stopPing().then(applyState);
+  }
   selectedId = id;
   render();
 }
@@ -557,7 +569,11 @@ $('pingBtn').addEventListener('click', async () => {
 api.onPingSample(({ id, ok, ms }) => {
   if (id !== pingSamples.id) return;
   pingSamples.list.push({ ok, ms });
-  if (id === selectedId) renderDetail();
+  if (id !== selectedId) return;
+  // Redraw only the graph. A full renderDetail() rebuilds the facts list once
+  // a second, which wipes any text the user is part-way through selecting.
+  const device = state.devices.find((d) => d.id === id);
+  if (device) renderPing(device);
 });
 
 $('portsBtn').addEventListener('click', async () => {

@@ -296,19 +296,28 @@ ipcMain.handle('ping:start', async (_e, { id }) => {
   pushState();
 
   (async () => {
-    for (let seq = 1; seq <= PING_SESSION_MAX && !session.cancelled; seq += 1) {
-      const result = await net.pingOnce(device.ip);
-      if (session.cancelled) break;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ping:sample', { id, seq, ok: result.ok, ms: result.ms });
+    try {
+      for (let seq = 1; seq <= PING_SESSION_MAX && !session.cancelled; seq += 1) {
+        // Time the whole probe, not just the reported round trip: a timeout
+        // costs its full deadline and reports no round trip at all, so pacing
+        // off `ms` made lost samples take twice as long as answered ones and
+        // the graph's even-width columns covered uneven amounts of time.
+        const startedAt = Date.now();
+        const result = await net.pingOnce(device.ip);
+        if (session.cancelled) break;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ping:sample', { id, seq, ok: result.ok, ms: result.ms });
+        }
+        const gap = Math.max(0, 1000 - (Date.now() - startedAt));
+        await new Promise((r) => setTimeout(r, gap));
       }
-      // One a second, so the graph reads as a timeline rather than a burst.
-      const gap = Math.max(0, 1000 - (result.ok ? result.ms : 0));
-      await new Promise((r) => setTimeout(r, gap));
-    }
-    if (pingSession === session) {
-      pingSession = null;
-      pushState();
+    } finally {
+      // Clearing this only on the happy path is what let a single stuck probe
+      // wedge scanning for the life of the process. Same mistake, same fix.
+      if (pingSession === session) {
+        pingSession = null;
+        pushState();
+      }
     }
   })();
 
