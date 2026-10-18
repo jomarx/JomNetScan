@@ -1,7 +1,7 @@
 'use strict';
 
 const { EventEmitter } = require('events');
-const net = require('./net.js');
+const net = require('./net/index.js');
 const oui = require('./oui.js');
 const discover = require('./discover.js');
 
@@ -69,26 +69,35 @@ class Scanner extends EventEmitter {
       const [arp, gateways] = await Promise.all([net.arpTable(), net.defaultGateways()]);
 
       const found = new Map();
-      for (const [ip, mac] of arp) {
+      for (const [ip, entry] of arp) {
         if (!hostSet.has(ip) && !selfIps.has(ip)) continue;
-        found.set(ip, { ip, mac });
+        found.set(ip, { ip, mac: entry.mac, neighbourState: entry.state });
       }
       // This machine never appears in its own ARP table.
       for (const iface of ifaces) {
-        if (!found.has(iface.address)) found.set(iface.address, { ip: iface.address, mac: iface.mac });
+        if (!found.has(iface.address)) {
+          found.set(iface.address, { ip: iface.address, mac: iface.mac, neighbourState: null });
+        }
       }
 
-      const devices = [...found.values()].map((d) => ({
+      const devices = [...found.values()].map(({ neighbourState, ...d }) => ({
         ...d,
         isGateway: gateways.has(d.ip),
         isSelf: selfIps.has(d.ip) || (d.mac ? selfMacs.has(d.mac) : false),
         vendor: oui.lookup(d.mac),
         randomizedMac: oui.isRandomized(d.mac),
-        // An ARP entry alone is weak evidence: Windows keeps them for a couple
-        // of minutes after a device leaves. A ping reply is proof it is still
-        // here. We can't demand one - plenty of hosts drop ICMP - so record
-        // both and let the UI say which it is.
-        respondedToPing: alive.has(d.ip),
+        // An ARP entry alone is weak evidence: the cache keeps entries for a
+        // couple of minutes after a device leaves. We can't demand a ping reply
+        // either, because plenty of hosts drop ICMP. So record whether presence
+        // was actually confirmed, and how, and let the UI say which it is.
+        //
+        // Linux answers this properly: `ip neigh` reports the kernel's own
+        // state, and REACHABLE means confirmed within the last few seconds.
+        // Windows has no equivalent, so there we fall back to inferring it from
+        // a ping reply - which is the weaker signal, and the one behind the
+        // known hollow-dot issue on the desktop build.
+        confirmed: neighbourState ? neighbourState === 'REACHABLE' : alive.has(d.ip),
+        confirmedVia: neighbourState ? 'neighbour' : 'ping',
       }));
 
       // 3. Put names to them.

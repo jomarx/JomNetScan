@@ -5,12 +5,12 @@ const {
   app, BrowserWindow, ipcMain, Notification, Tray, Menu, shell, nativeImage,
 } = require('electron');
 
-const { Store, NEW_BADGE_MS } = require('./store.js');
-const { Scanner } = require('./scanner.js');
-const net = require('./net.js');
-const oui = require('./oui.js');
-const discover = require('./discover.js');
-const ports = require('./ports.js');
+const { Store, NEW_BADGE_MS } = require('../core/store.js');
+const { Scanner } = require('../core/scanner.js');
+const net = require('../core/net/index.js');
+const oui = require('../core/oui.js');
+const ports = require('../core/ports.js');
+const { migrateStore } = require('../core/migrate.js');
 
 let mainWindow = null;
 let tray = null;
@@ -146,7 +146,7 @@ function createWindow() {
     icon: assetPath('icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -177,16 +177,7 @@ function start() {
   scanner = new Scanner();
   oui.load([ouiUserPath(), path.join(__dirname, '..', '..', 'data', 'oui.json')]);
 
-  // Earlier builds stored service identifiers as announced names, and a merge
-  // keeps the last one it saw. Drop anything the current filter would reject.
-  let dropped = 0;
-  for (const device of store.list()) {
-    if (device.discoveredName && discover.looksLikeIdentifier(device.discoveredName)) {
-      device.discoveredName = null;
-      dropped += 1;
-    }
-  }
-  if (dropped) store.saveDevices();
+  migrateStore(store);
 
   scanner.on('progress', (payload) => {
     if (mainWindow && !mainWindow.isDestroyed()) {

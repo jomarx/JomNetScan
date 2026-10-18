@@ -229,3 +229,8 @@ textarea { resize: vertical; }
 }
 .ping-stats b { color: var(--text); font-weight: 600; }
 .ping-stats .loss-bad b { color: var(--danger); }
+
+/* One UI, two front ends. The class is set on <html> by renderer.js before
+   anything paints, so neither build flashes the other's controls. */
+.platform-web .desktop-only,
+.platform-desktop .web-only { display: none; }

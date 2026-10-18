@@ -4,3 +4,6 @@ out/
 *.log
 data/oui.json
 .claude/
+
+# Web build data directory when run from the repo (dev only)
+.data/

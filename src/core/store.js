@@ -20,7 +20,14 @@ const DEFAULT_SETTINGS = {
   pingTimeoutMs: 1000,
   concurrency: 64,
   interfaceName: null, // null = scan every scannable interface
-  minimizeToTray: true,
+  minimizeToTray: true, // desktop build only
+
+  // Outbound alerts, web build only, all off by default. `notifyOnNew` above
+  // is the master switch for both builds: a desktop toast there, these here.
+  telegramToken: '',
+  telegramChatId: '',
+  webhookUrl: '',
+  webhookFormat: 'ntfy', // or 'json'
 };
 
 /** Read JSON, returning `fallback` for anything unreadable or corrupt. */
@@ -101,7 +108,8 @@ class Store {
           vendor: device.vendor || null,
           isGateway: !!device.isGateway,
           randomizedMac: !!device.randomizedMac,
-          respondedToPing: !!device.respondedToPing,
+          confirmed: !!device.confirmed,
+          confirmedVia: device.confirmedVia || null,
           isSelf: !!device.isSelf,
           notes: '',
           firstSeen: scanStartedAt,
@@ -123,7 +131,8 @@ class Store {
       existing.vendor = device.randomizedMac ? null : (device.vendor || existing.vendor);
       existing.isGateway = !!device.isGateway;
       existing.randomizedMac = !!device.randomizedMac;
-      existing.respondedToPing = !!device.respondedToPing;
+      existing.confirmed = !!device.confirmed;
+      existing.confirmedVia = device.confirmedVia || null;
       existing.isSelf = !!device.isSelf;
       existing.lastSeen = scanStartedAt;
       existing.online = true;

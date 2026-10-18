@@ -1,10 +1,23 @@
 # JomNetScan
 
-A small Windows desktop app for keeping an eye on your home network. It finds
-everything talking on your LAN, lets you give each thing a name, and tells you
-when something shows up that you haven't named yet.
+A small app for keeping an eye on your home network. It finds everything
+talking on your LAN, lets you give each thing a name, and tells you when
+something shows up that you haven't named yet.
 
 Think Fing, minus the account, the cloud, and the upsell.
+
+It comes in two shapes, sharing one scanner and one UI:
+
+- **A Windows desktop app.** `npm start`, or build an installer with
+  `npm run dist`.
+- **A web app for a Linux server.** `npm run serve`. Scans around the clock
+  instead of only while your laptop is awake, is reachable from any browser on
+  the LAN, and can push new-device alerts to your phone. Setup is in
+  [deploy/README.md](deploy/README.md).
+
+The desktop build is the one to use if you just want to look at your network
+now and then. The server build is the one that notices things while you aren't
+looking.
 
 ## What it does
 
@@ -17,11 +30,15 @@ Think Fing, minus the account, the cloud, and the upsell.
   adopts the lot.
 - **Flags new arrivals** — a device that turns up is badged **New · 12m**,
   counting how long it has been on the list, and sorted to the top. Optional
-  desktop notification when one appears.
-- **Runs quietly** — rescans on a timer, lives in the system tray.
-- **Keeps your data local** — one JSON file in your user profile. Discovery and
-  scanning stay on your LAN; the only thing that reaches the internet is the
-  optional vendor-database download, and only when you ask for it.
+  notification when one appears: a desktop toast, or on the server build a
+  Telegram or ntfy message to your phone.
+- **Runs quietly** — rescans on a timer. On the desktop it lives in the system
+  tray; on the server it's a systemd service.
+- **Keeps your data local** — a couple of JSON files on the machine it runs on.
+  Discovery and scanning never leave your LAN. Two things can reach the
+  internet, both off by default and both only because you switched them on: the
+  vendor-database download, and phone alerts if you configure Telegram. See
+  *What leaves your network* below.
 
 ## Running it
 
@@ -32,6 +49,20 @@ npm start
 
 If Electron's binary doesn't download during install (npm may block the
 postinstall script), run `node node_modules/electron/install.js` once.
+
+To run the web build instead — on Linux, or on Windows for development:
+
+```bash
+JOMNETSCAN_PASSWORD=something npm run serve
+```
+
+Then open `http://localhost:8099`. Leave the password unset and the server
+makes one up each time it starts and prints it to the log, so it is never
+accidentally open to the whole LAN. For the real thing — a systemd unit, a
+service account, phone alerts — see [deploy/README.md](deploy/README.md).
+
+The web build needs no Electron and no build step: it serves the same
+`src/renderer/` the desktop app loads.
 
 To build a Windows installer and a portable `.exe` into `dist/`:
 
@@ -82,11 +113,12 @@ thirty permanently-flagged rows you learn to ignore the colour, and a device
 that genuinely appeared five minutes ago looks exactly like one from last week.
 The counter is there so you can tell those apart at a glance.
 
-Expiry runs in the main process — on startup, after every scan, and on a
-one-minute tick so badges still age out with auto-scan switched off. The window
-lives in one constant (`NEW_BADGE_MS` in `src/main/store.js`) that the UI is
-handed in its state, so the badge, the **Unnamed / new** count and the tray
-tooltip can't drift apart.
+Expiry runs server-side — in the Electron main process or the web server, not
+in the browser — on startup, after every scan, and on a one-minute tick so
+badges still age out with auto-scan switched off. The window lives in one
+constant (`NEW_BADGE_MS` in `src/core/store.js`) that the UI is handed in its
+state, so the badge, the **Unnamed / new** count and the tray tooltip can't
+drift apart.
 
 ## Pinging a device
 
@@ -125,7 +157,7 @@ Deliberate limits:
 - **Only devices already in your list.** The scan is addressed by stored device
   id, so there is no way to point it at an arbitrary host from the UI.
 - **Common ports, not all 65535.** The curated list is in
-  `src/main/ports.js` if you want to add to it.
+  `src/core/ports.js` if you want to add to it.
 
 An open port is not by itself a problem — your router answering on 80 and 443
 is just its admin page. It's worth a look when a device you can't account for
@@ -203,10 +235,18 @@ bulbs announce nothing and still need naming by hand. Switch it off under
    Anything wider than a /22 is skipped as too slow to sweep politely.
 2. Ping every host address in parallel. The replies barely matter — the point is
    to populate the ARP cache.
-3. Parse `arp -a` for IP/MAC pairs, dropping multicast and broadcast rows.
-4. Read `route print` for the default gateway so the router gets labelled.
-5. Resolve names via reverse DNS, falling back to `nbtstat` for the Windows
-   boxes and printers a home router won't have DNS entries for.
+3. Read the ARP table for IP/MAC pairs, dropping multicast and broadcast rows.
+4. Read the routing table for the default gateway so the router gets labelled.
+5. Resolve names via reverse DNS, falling back to NetBIOS for the Windows boxes
+   and printers a home router won't have DNS entries for.
+
+Steps 2–5 are the only platform-specific code in the app, and they live in
+`src/core/net/windows.js` and `src/core/net/linux.js`. Windows shells out to
+`ping`, `arp -a`, `route print` and `nbtstat`; Linux to `ping`,
+`ip -4 neigh show`, `ip -4 route show default` and `nmblookup`. `ip` is part of
+iproute2 and is always there; `nmblookup` comes from `samba-common-bin` and
+often isn't, so it's probed for once and skipped if missing rather than failing
+254 times a sweep.
 
 The mDNS and SSDP listening described under *Automatic naming* runs alongside
 the sweep rather than after it, so it costs no extra wall time.
@@ -227,18 +267,27 @@ run, and the dropdown keeps showing the pinned adapter marked *not connected*.
 
 ## Known limits
 
-- **Windows only.** The scan shells out to `ping`, `arp`, `route`, and
-  `nbtstat` with Windows argument syntax.
+- **Windows and Linux only.** The desktop app is Windows; the web build is
+  developed against Ubuntu. macOS would need a third `src/core/net/` module —
+  BSD `ping` and `arp` take different arguments again.
 - **Same-subnet only.** ARP doesn't cross a router, so guest networks and
   separate VLANs won't show up.
 - **Sleeping devices look offline.** A phone with its screen off often won't
   answer a ping. Devices are marked offline, never deleted.
 - **"Online" can lag reality by a minute or two.** Presence comes from the ARP
   cache, because plenty of hosts drop ICMP and demanding a ping reply would
-  hide them. Windows keeps ARP entries for a short while after a device leaves,
-  so a departed device can linger. A **hollow** status dot means exactly that:
-  seen in the ARP table, but it never answered a ping this scan. A solid dot
-  means it replied.
+  hide them. The cache keeps entries for a short while after a device leaves,
+  so a departed device can linger. A **hollow** status dot is the app saying
+  so: present in the table, but not confirmed this scan.
+- **The hollow dot is trustworthy on Linux and not on Windows.** On Linux it
+  comes from the kernel's own neighbour state — `ip neigh` reports `REACHABLE`
+  for an entry confirmed in the last few seconds and `STALE` for one that is
+  merely cached, which is exactly the distinction the dot exists to draw. On
+  Windows there is no equivalent, so the dot falls back to "did this device
+  answer a ping during this scan", and in the packaged build that answer is
+  unreliable — devices that are plainly up still render hollow. Treat a hollow
+  dot on Windows as "no information", not as "probably gone". Hovering a dot
+  says which of the two you're looking at.
 - **Randomized MACs.** Phones that rotate their MAC per network will appear as
   a new device when they rotate. There's no fix for this from outside the
   device; the app at least labels them so you know what you're looking at.
@@ -246,11 +295,42 @@ run, and the dropdown keeps showing the pinned adapter marked *not connected*.
   name for free, and only while they're awake — a TV that's off announces
   nothing. Rescan later and it fills in.
 
+## What leaves your network
+
+Nothing, unless you ask for it. Scanning, discovery and port checks are all
+LAN-local, there is no account, no telemetry and no phone-home.
+
+Two features are exceptions, and both are off until you turn them on:
+
+- **The vendor database** — a one-off ~4 MB fetch from the IEEE, on the button
+  press or `npm run update-oui`. It sends nothing about your network.
+- **Telegram alerts** (web build) — this one is a real trade. Telegram learns
+  that a new device joined your network, when, and whatever the alert text
+  says. That is a reasonable price for an alert that reaches your phone, but
+  it is a third party learning something about your house, so it is worth
+  deciding deliberately rather than by default. A **webhook** pointed at an
+  [ntfy](https://ntfy.sh) instance you host yourself gets you the same phone
+  notification with nothing leaving the building.
+
 ## Where your data lives
 
-`%APPDATA%\JomNetScan\` — `devices.json`, `settings.json`, and the downloaded
-`oui.json`. **Settings → Open data folder** takes you there. Deleting
+Desktop: `%APPDATA%\JomNetScan\`. **Settings → Open data folder** takes you
+there.
+
+Web: `/var/lib/jomnetscan` under systemd, `.data/` beside the repo otherwise,
+or wherever `JOMNETSCAN_DATA` points.
+
+Either way it's `devices.json`, `settings.json`, the downloaded `oui.json`,
+and on the web build a `secret` file used to sign session cookies. Deleting
 `devices.json` resets the app; everything is then "new" again.
+
+The two builds keep separate data. Pointing them at the same directory is not
+supported — they'd both write `devices.json` with no coordination.
+
+`settings.json` holds the Telegram bot token in plain text, which is why the
+systemd unit sets `StateDirectoryMode=0700`. The token is never sent back to a
+browser in full: the UI shows a mask, and saving the mask leaves the stored
+value alone.
 
 ## The icon
 
@@ -272,19 +352,43 @@ taskbar and tray use.
 
 ## Layout
 
+Two front ends over one core. Nothing in `src/core/` knows which one is
+running it.
+
 ```
-src/main/net.js       ping sweep, ARP, route and name lookups
-src/main/scanner.js   orchestrates one scan, emits progress
-src/main/store.js     devices.json + settings.json, atomic writes
-src/main/oui.js       MAC vendor lookup and IEEE registry download
-src/main/discover.js  mDNS and SSDP name discovery
-src/main/main.js      window, tray, notifications, IPC
+src/core/             no Electron, no HTTP — shared by both front ends
+  net/index.js          picks a backend off process.platform
+  net/common.js         interface enumeration, MAC/IP helpers, pooling
+  net/windows.js        ping / arp -a / route print / nbtstat
+  net/linux.js          ping / ip neigh / ip route / nmblookup
+  scanner.js            orchestrates one scan, emits progress
+  store.js              devices.json + settings.json, atomic writes
+  oui.js                MAC vendor lookup and IEEE registry download
+  discover.js           mDNS and SSDP name discovery
+  ports.js              the curated port list and the TCP connect scan
+  migrate.js            startup housekeeping both front ends need
+src/desktop/          the Electron app
+  main.js               window, tray, notifications, IPC
+  preload.js            the narrow API the UI is allowed to call
+src/web/              the server
+  server.js             routes, SSE, static files
+  auth.js               password check, signed session cookie
+  notify.js             Telegram and webhook delivery, secret masking
+src/renderer/         the UI, served unchanged by both
+  index.html styles.css renderer.js
+  jomnet-http.js        fetch + EventSource shim; no-ops under Electron
 src/assets/           generated tray and window icons
-src/preload/          the narrow API the UI is allowed to call
-src/renderer/         the UI (plain HTML/CSS/JS, no framework)
+deploy/               systemd unit and install notes
 ```
 
-The UI is plain HTML, CSS and JavaScript — no framework, no build step. The one
-runtime dependency is `multicast-dns`, used for the mDNS half of discovery;
-hand-rolling a DNS packet parser wasn't worth the bug risk. Everything else —
-the ping sweep, ARP parsing, SSDP, the OUI download — is Node standard library.
+The UI is plain HTML, CSS and JavaScript — no framework, no build step. It
+talks to exactly one object, `window.jomnet`, which Electron's preload supplies
+over IPC and `jomnet-http.js` supplies over HTTP. That one seam is the whole
+reason there are two front ends and not two apps: `renderer.js` cannot tell
+which it's running under, beyond a `platform` field it uses to hide three
+controls that don't apply.
+
+The one runtime dependency is `multicast-dns`, used for the mDNS half of
+discovery; hand-rolling a DNS packet parser wasn't worth the bug risk.
+Everything else — the ping sweep, ARP parsing, SSDP, the OUI download, the HTTP
+server, the session cookies — is Node standard library.

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self';" />
   <title>JomNetScan</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -98,11 +98,39 @@
       <label class="row"><input type="checkbox" id="setNotify" /> <span>Notify me when a new device appears</span></label>
       <label class="row"><input type="checkbox" id="setNetbios" /> <span>Ask devices for their NetBIOS name (slower, finds more names)</span></label>
       <label class="row"><input type="checkbox" id="setDiscover" /> <span>Listen for names devices announce (mDNS / UPnP)</span></label>
-      <label class="row"><input type="checkbox" id="setTray" /> <span>Keep running in the tray when I close the window</span></label>
+      <label class="row desktop-only"><input type="checkbox" id="setTray" /> <span>Keep running in the tray when I close the window</span></label>
 
       <label class="field">Network interface
         <select id="setInterface"></select>
       </label>
+
+      <div class="web-only">
+        <hr />
+        <h3>Alerts</h3>
+        <p class="hint">Where "notify me when a new device appears" should send it. Both channels
+          are optional and both fire if you configure both. This is the only part of JomNetScan
+          that talks to the internet apart from the vendor download.</p>
+
+        <label class="field">Telegram bot token
+          <input type="text" id="setTelegramToken" placeholder="from @BotFather" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">Telegram chat id
+          <input type="text" id="setTelegramChatId" placeholder="message the bot, then check /getUpdates" autocomplete="off" spellcheck="false" />
+        </label>
+
+        <label class="field">Webhook URL
+          <input type="text" id="setWebhookUrl" placeholder="https://ntfy.sh/your-topic" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">Webhook format
+          <select id="setWebhookFormat">
+            <option value="ntfy">ntfy (plain text)</option>
+            <option value="json">JSON</option>
+          </select>
+        </label>
+
+        <button id="testAlertBtn" class="ghost">Send test message</button>
+        <p class="hint" id="testAlertStatus"></p>
+      </div>
 
       <hr />
       <h3>Vendor database</h3>
@@ -110,11 +138,14 @@
       <p class="hint">Downloads the public IEEE MAC registry (about 4 MB) so device makers show up instead of blanks.</p>
       <button id="ouiBtn" class="ghost">Download vendor database</button>
 
-      <hr />
-      <button id="dataBtn" class="ghost">Open data folder</button>
+      <div class="desktop-only">
+        <hr />
+        <button id="dataBtn" class="ghost">Open data folder</button>
+      </div>
     </div>
   </div>
 
+  <script src="jomnet-http.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

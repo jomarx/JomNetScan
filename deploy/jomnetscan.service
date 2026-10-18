@@ -1,0 +1,48 @@
+[Unit]
+Description=JomNetScan - LAN device monitor
+Documentation=https://github.com/jomarx/JomNetScan
+# The scan needs a usable network at startup, not just a configured one.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jomnetscan
+Group=jomnetscan
+WorkingDirectory=/opt/jomnetscan
+ExecStart=/usr/bin/node /opt/jomnetscan/src/web/server.js
+
+# JOMNETSCAN_PASSWORD and, optionally, JOMNETSCAN_PORT / JOMNETSCAN_BIND.
+# Root-owned and mode 0600 - see deploy/README.md.
+EnvironmentFile=/etc/jomnetscan/env
+
+# Creates and owns /var/lib/jomnetscan, so there is no install-time mkdir or
+# chown to get wrong. 0700 because settings.json holds the Telegram token and
+# the cookie-signing secret lives beside it.
+StateDirectory=jomnetscan
+StateDirectoryMode=0700
+
+Restart=always
+RestartSec=5
+
+# --- Hardening -------------------------------------------------------------
+# All of it is additive: if something stops working after a distro upgrade,
+# comment these out from the bottom up before suspecting the app.
+#
+# NoNewPrivileges blocks file capabilities, which would matter if ping needed
+# cap_net_raw. On Ubuntu it doesn't: net.ipv4.ping_group_range defaults to
+# "0 2147483647", so any user may open an unprivileged ICMP socket. If pings
+# fail here but work when you run the server by hand, that sysctl is the first
+# thing to check - see deploy/README.md.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

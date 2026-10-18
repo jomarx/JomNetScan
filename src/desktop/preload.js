@@ -5,6 +5,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 // The renderer gets this narrow, explicit surface and nothing else -
 // no Node, no require, no direct ipcRenderer.
 contextBridge.exposeInMainWorld('jomnet', {
+  // Tells the shared UI which front end it is running under, and tells
+  // jomnet-http.js that window.jomnet is already taken.
+  platform: 'desktop',
+
   getState: () => ipcRenderer.invoke('state:get'),
   scan: () => ipcRenderer.invoke('scan:run'),
   rename: (id, name) => ipcRenderer.invoke('device:rename', { id, name }),

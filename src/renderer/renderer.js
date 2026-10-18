@@ -2,6 +2,11 @@
 
 const api = window.jomnet;
 
+// Which front end is hosting this UI. Controls alone decide what shows: the
+// tray toggle and "open data folder" mean nothing on a server, and the alert
+// channels mean nothing on a desktop that can raise a real notification.
+document.documentElement.classList.add(`platform-${api.platform || 'desktop'}`);
+
 let state = { devices: [], settings: {}, interfaces: [], scanning: false, oui: { entries: 0 } };
 let filter = 'all';
 let query = '';
@@ -169,6 +174,21 @@ function renderStats() {
     .join('');
 }
 
+/**
+ * What the status dot is actually telling you. The two platforms establish
+ * presence differently and the tooltip shouldn't pretend otherwise: Linux
+ * reads the kernel's neighbour state, Windows can only infer it from a ping
+ * reply, which is the weaker signal of the two.
+ */
+function presenceLabel(device) {
+  if (device.confirmedVia === 'neighbour') {
+    return device.confirmed
+      ? 'Confirmed present by the kernel neighbour table'
+      : 'In the neighbour table, but not confirmed recently';
+  }
+  return device.confirmed ? 'Replied to ping' : 'Seen in the ARP table, no ping reply';
+}
+
 function renderRows() {
   const devices = visibleDevices();
   const tbody = $('rows');
@@ -195,7 +215,7 @@ function renderRows() {
     const nameClass = device.name ? 'name' : 'name unnamed';
 
     tr.innerHTML = `
-      <td><span class="dot ${device.online ? 'on' : ''}${device.online && !device.respondedToPing ? ' weak' : ''}" title="${device.online ? (device.respondedToPing ? 'Replied to ping' : 'Seen in the ARP table, no ping reply') : 'Offline'}"></span></td>
+      <td><span class="dot ${device.online ? 'on' : ''}${device.online && !device.confirmed ? ' weak' : ''}" title="${device.online ? escapeHtml(presenceLabel(device)) : 'Offline'}"></span></td>
       <td>
         <div class="${nameClass}">${escapeHtml(displayName(device))}${tags.join('')}</div>
         ${secondary ? `<div class="sub">${escapeHtml(secondary)}</div>` : ''}
@@ -250,7 +270,7 @@ function renderDetail() {
     ['First seen', absoluteTime(device.firstSeen)],
     ['Last seen', absoluteTime(device.lastSeen)],
     ['Status', device.online ? 'Online' : 'Offline'],
-    ['Reachability', device.respondedToPing ? 'Replied to ping' : 'Seen in the ARP table only'],
+    ['Reachability', presenceLabel(device)],
   ];
   $('facts').innerHTML = facts
     .map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`)
@@ -398,7 +418,16 @@ function renderSettings() {
   setChecked('setNetbios', !!s.useNetbios);
   setChecked('setDiscover', s.discoverNames !== false);
   setChecked('setTray', !!s.minimizeToTray);
+
+  // Secrets arrive masked from the server and must stay masked here, or the
+  // next change event on the form would write the mask back over the real
+  // value. The server also refuses a masked write, so this is belt and braces.
+  const setValue = (id, value) => { const el = $(id); if (!editing(el)) el.value = value ?? ''; };
   if (!editing($('setInterval'))) $('setInterval').value = s.intervalMinutes;
+  setValue('setTelegramToken', s.telegramToken);
+  setValue('setTelegramChatId', s.telegramChatId);
+  setValue('setWebhookUrl', s.webhookUrl);
+  setValue('setWebhookFormat', s.webhookFormat || 'ntfy');
 
   const select = $('setInterface');
   const scannable = state.interfaces.filter((i) => i.scannable);
@@ -531,6 +560,28 @@ bindSetting('setDiscover', 'discoverNames', (el) => el.checked);
 bindSetting('setTray', 'minimizeToTray', (el) => el.checked);
 bindSetting('setInterval', 'intervalMinutes', (el) => Math.max(1, Number(el.value) || 5));
 bindSetting('setInterface', 'interfaceName', (el) => el.value || null);
+bindSetting('setTelegramToken', 'telegramToken', (el) => el.value.trim());
+bindSetting('setTelegramChatId', 'telegramChatId', (el) => el.value.trim());
+bindSetting('setWebhookUrl', 'webhookUrl', (el) => el.value.trim());
+bindSetting('setWebhookFormat', 'webhookFormat', (el) => el.value);
+
+$('testAlertBtn').addEventListener('click', async () => {
+  const btn = $('testAlertBtn');
+  const status = $('testAlertStatus');
+  btn.disabled = true;
+  status.textContent = 'Sending...';
+  try {
+    const result = await api.testAlerts();
+    // Report per channel: with Telegram and a webhook both configured, "it
+    // failed" without saying which one is not worth reading.
+    status.textContent = result.results
+      ? result.results.map((r) => `${r.channel}: ${r.ok ? 'delivered' : r.error}`).join(' - ')
+      : (result.error || 'Nothing to send to.');
+  } catch (err) {
+    status.textContent = `Could not send: ${err.message}`;
+  }
+  btn.disabled = false;
+});
 
 $('ouiBtn').addEventListener('click', async () => {
   const btn = $('ouiBtn');
