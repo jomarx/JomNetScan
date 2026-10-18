@@ -13,6 +13,10 @@ Type=oneshot
 # checkout and restart the service. The main service stays unprivileged; only
 # this short-lived unit is privileged, and only to do the update.
 ExecStart=/opt/jomnetscan/deploy/jomnetscan-update.sh
+# The script can wait up to twice JOMNETSCAN_UPDATE_WAIT (default 15 min) for
+# the service to go idle - once before pulling, once before restarting. Cap the
+# whole run so a wedged flag can never pile timer runs up behind it.
+TimeoutStartSec=45min
 
 # Optional overrides, same file the service reads - JOMNETSCAN_BRANCH etc.
 # EnvironmentFile=/etc/jomnetscan/env

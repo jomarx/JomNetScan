@@ -40,6 +40,7 @@ let lastScan = null;
 let scanError = null;
 let portScanning = null;
 let pingSession = null;
+let ouiDownloading = false;
 let scanTimer = null;
 
 const store = new Store(DATA_DIR);
@@ -87,7 +88,44 @@ function broadcast(event, payload) {
 }
 
 function pushState() {
+  syncBusyFlag();
   broadcast('state', buildState());
+}
+
+// ---------------------------------------------------------------------------
+// The busy flag
+//
+// The auto-update timer runs as root and restarts this service, which would
+// abandon whatever is in flight. It can't ask the API (that needs the
+// password), so this file is how it knows to wait: present while a scan, port
+// scan, ping graph or vendor download is running, gone when nothing is. It
+// lives in the state directory so only root and this service can see it.
+
+const BUSY_FILE = path.join(DATA_DIR, 'busy');
+let busyWritten = null;
+
+function busyReasons() {
+  const reasons = [];
+  if (scanner.running) reasons.push('scan');
+  if (portScanning) reasons.push('port scan');
+  if (pingSession) reasons.push('ping');
+  if (ouiDownloading) reasons.push('vendor download');
+  return reasons.join(', ');
+}
+
+function syncBusyFlag() {
+  const reasons = busyReasons();
+  if (reasons === busyWritten) return;
+  try {
+    if (reasons) fs.writeFileSync(BUSY_FILE, `${reasons}
+`);
+    else fs.rmSync(BUSY_FILE, { force: true });
+    busyWritten = reasons;
+  } catch (err) {
+    // Not fatal: the worst case is an update restarting mid-scan, which is
+    // what happened before this flag existed.
+    log(`Couldn't update the busy flag: ${err.message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -106,7 +144,11 @@ async function runScan(trigger) {
   scanError = null;
   pushState();
   try {
-    const result = await scanner.scan(store.getSettings());
+    // scan() flips `running` synchronously, so the flag goes up before the
+    // first ping rather than at the next state push.
+    const scanning = scanner.scan(store.getSettings());
+    syncBusyFlag();
+    const result = await scanning;
     const baseline = store.isEmpty();
     const newDevices = store.merge(result.devices, result.startedAt);
     store.expireNewFlags();
@@ -144,6 +186,9 @@ function rescheduleAutoScan() {
 function stopPing() {
   if (pingSession) pingSession.cancelled = true;
   pingSession = null;
+  // The session's own cleanup skips the state push once it's been replaced,
+  // so drop the flag here or it would stay up until something else changed.
+  syncBusyFlag();
 }
 
 function startPing(id) {
@@ -437,6 +482,8 @@ async function handle(req, res) {
   }
 
   if (route === '/api/oui/download' && req.method === 'POST') {
+    ouiDownloading = true;
+    syncBusyFlag();
     try {
       const result = await oui.download(path.join(DATA_DIR, 'oui.json'));
       for (const device of store.list()) {
@@ -448,6 +495,9 @@ async function handle(req, res) {
       sendJson(res, { ok: true, entries: result.entries });
     } catch (err) {
       sendJson(res, { ok: false, error: err.message });
+    } finally {
+      ouiDownloading = false;
+      syncBusyFlag();
     }
     return;
   }
@@ -492,6 +542,9 @@ async function handle(req, res) {
 function start() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   log(`Data directory: ${DATA_DIR}`);
+  // A flag left behind by a crash mid-scan. Nothing is running yet, so this
+  // removes it (busyWritten starts null, which never equals "").
+  syncBusyFlag();
 
   oui.load([path.join(DATA_DIR, 'oui.json'), BUNDLED_OUI]);
   const stats = oui.stats();
@@ -535,6 +588,8 @@ function start() {
     log(`${signal} received, shutting down`);
     stopPing();
     updater.stop();
+    // Don't leave a flag claiming a scan this process will never finish.
+    try { fs.rmSync(BUSY_FILE, { force: true }); } catch { /* best effort */ }
     if (scanTimer) clearInterval(scanTimer);
     for (const client of clients) client.end();
     server.close(() => process.exit(0));

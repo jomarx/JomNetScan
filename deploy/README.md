@@ -234,6 +234,17 @@ without editing anything. A fast-forward is the whole safety: if you've made
 local commits, or the history diverged, it stops and leaves the running service
 untouched rather than rewriting anything.
 
+**It never restarts in the middle of something.** While a scan, port scan, ping
+graph or vendor download is running, the service keeps a flag file at
+`/var/lib/jomnetscan/busy` naming what's in flight. The update waits for it to
+clear — before pulling, and again just before restarting, since a scheduled
+scan can start while `npm install` runs — for up to 15 minutes each time
+(`JOMNETSCAN_UPDATE_WAIT`, in seconds). If it's still busy after that it gives
+up until the next hour; if the code was already pulled by then, the next run
+does the owed restart even though it finds nothing new to fetch. A flag left by
+a stopped service is ignored, and it uses `try-restart`, so a service you
+stopped on purpose stays stopped.
+
 Check it by hand, or watch it:
 
 ```bash
@@ -242,12 +253,15 @@ systemctl list-timers jomnetscan-update.timer      # when it next fires
 journalctl -u jomnetscan-update.service            # what it did last time
 ```
 
-A restart drops every open browser's live connection for a moment; they
-reconnect on their own, and a scan or ping in flight is abandoned. So the timer
-is a reasonable default for a home box, but if you'd rather pick your moment,
-skip the timer and run the script by hand when the amber line appears — or stay
-with the manual [Updating](#updating) steps below, which are the same thing
-without the automation.
+A restart still drops every open browser's live connection for a moment; they
+reconnect on their own. If you'd rather pick your moment, skip the timer and run
+the script by hand when the amber line appears — or stay with the manual
+[Updating](#updating) steps below, which are the same thing without the
+automation (and without the wait for idle).
+
+**Installing the timer on a box running an older build:** update by hand once
+first. The busy flag comes from the service, so a service from before it existed
+never writes one, and the timer's first update would restart it without waiting.
 
 If you don't want automatic updates at all, just don't install the timer. The
 hourly in-UI check is still there and still only reads; nothing updates until
