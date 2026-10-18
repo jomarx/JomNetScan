@@ -90,6 +90,7 @@ async function runScan(trigger) {
   pushState();
   try {
     const result = await scanner.scan(store.getSettings());
+    const baseline = store.isEmpty();
     const newDevices = store.merge(result.devices, result.startedAt);
     store.expireNewFlags();
     lastScan = {
@@ -99,7 +100,8 @@ async function runScan(trigger) {
       newCount: newDevices.length,
     };
 
-    if (newDevices.length && store.getSettings().notifyOnNew && Notification.isSupported()) {
+    // A first run on an empty store is a baseline, not thirty arrivals.
+    if (!baseline && newDevices.length && store.getSettings().notifyOnNew && Notification.isSupported()) {
       const names = newDevices
         .map((d) => d.hostname || d.vendor || d.ip)
         .slice(0, 3)

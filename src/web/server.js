@@ -90,12 +90,21 @@ function pushState() {
 // ---------------------------------------------------------------------------
 // Scanning
 
+/**
+ * Thrown by an action that was asked for something already in flight. The
+ * dispatcher turns it into a 409 carrying the current state, because a
+ * cheerful 200 with an empty device list reads as a broken scan rather than
+ * as a no-op - which is exactly how it was first misread.
+ */
+class Conflict extends Error {}
+
 async function runScan(trigger) {
   if (scanner.running) return;
   scanError = null;
   pushState();
   try {
     const result = await scanner.scan(store.getSettings());
+    const baseline = store.isEmpty();
     const newDevices = store.merge(result.devices, result.startedAt);
     store.expireNewFlags();
     lastScan = {
@@ -104,7 +113,9 @@ async function runScan(trigger) {
       count: result.devices.length,
       newCount: newDevices.length,
     };
-    if (newDevices.length) {
+    if (baseline) {
+      log(`Scan (${trigger}): ${newDevices.length} devices, recorded as the baseline (no alert)`);
+    } else if (newDevices.length) {
       log(`Scan (${trigger}): ${result.devices.length} devices, ${newDevices.length} new`);
       // Deliberately not awaited: a slow Telegram shouldn't hold the scan open.
       notify.notifyNewDevices(store.getSettings(), newDevices, log)
@@ -167,7 +178,8 @@ function startPing(id) {
 
 async function scanDevicePorts(id) {
   const device = store.get(id);
-  if (!device || portScanning) return;
+  if (!device) throw new Conflict('No such device');
+  if (portScanning) throw new Conflict('A port scan is already running');
   portScanning = id;
   pushState();
   try {
@@ -301,7 +313,10 @@ function sendHtml(res, html, status = 200) {
 
 /** POST handlers. Each returns the new state, mirroring the desktop IPC calls. */
 const ACTIONS = {
-  '/api/scan': async () => { await runScan('manual'); },
+  '/api/scan': async () => {
+    if (scanner.running) throw new Conflict('A scan is already running');
+    await runScan('manual');
+  },
   '/api/device/rename': (body) => { store.rename(body.id, body.name); },
   '/api/device/save': (body) => { store.update(body.id, { name: body.name, notes: body.notes }); },
   '/api/device/notes': (body) => { store.setNotes(body.id, body.notes); },
@@ -448,7 +463,13 @@ async function handle(req, res) {
       sendJson(res, { error: err.message }, 400);
       return;
     }
-    await action(body);
+    try {
+      await action(body);
+    } catch (err) {
+      if (!(err instanceof Conflict)) throw err;
+      sendJson(res, { ...buildState(), skipped: err.message }, 409);
+      return;
+    }
     pushState();
     sendJson(res, buildState());
     return;

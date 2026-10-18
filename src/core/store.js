@@ -84,9 +84,18 @@ class Store {
     return this.devices[id] || null;
   }
 
+  isEmpty() {
+    return Object.keys(this.devices).length === 0;
+  }
+
   /**
    * Fold one scan's findings into the stored list.
    * Returns the devices seen here for the first time, so the caller can alert.
+   *
+   * On an empty store every device is "first seen", but that is a baseline
+   * being established, not thirty arrivals - so callers check `isEmpty()`
+   * first and skip the alert. The devices are still badged New, which is
+   * right: New means unnamed, and on a fresh install nothing is named.
    */
   merge(found, scanStartedAt) {
     const seen = new Set();

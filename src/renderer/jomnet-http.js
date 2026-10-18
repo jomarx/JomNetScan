@@ -57,7 +57,12 @@ if (!window.jomnet) {
       window.location.href = '/login';
       throw new Error('Not signed in');
     }
-    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    // 409 is "that is already running". The body is still the current state,
+    // and the UI's job is only to show what's in flight, which it already
+    // does from the `scanning` / `portScanning` fields.
+    if (!response.ok && response.status !== 409) {
+      throw new Error(`Request failed: ${response.status}`);
+    }
     return response.json();
   }
 
