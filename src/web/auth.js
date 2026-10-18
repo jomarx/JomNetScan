@@ -88,11 +88,43 @@ function createAuth({ dataDir, log }) {
     return sameString(token.slice(dot + 1), sign(expires));
   }
 
-  /** Behind a reverse proxy the socket address is the proxy, so trust the header if present. */
+  function isLoopback(address) {
+    return /^(127\.|::1$|::ffff:127\.)/.test(address);
+  }
+
+  /**
+   * Who to count a failed login against.
+   *
+   * Behind a reverse proxy the socket address is the proxy's, so the real
+   * client is in X-Forwarded-For. But that header is written by whoever sent
+   * the request: this server binds 0.0.0.0, so anyone on the LAN or tailnet
+   * can set it, and a fresh made-up value on each attempt hands every guess
+   * its own bucket. That is not a weakened rate limit, it is no rate limit -
+   * on the one control standing between the device list and anyone who can
+   * reach the port.
+   *
+   * So the header counts only when the connection itself came from loopback,
+   * which is where a local proxy connects from (Tailscale serve, Caddy,
+   * nginx). A client cannot forge the address it connected from.
+   *
+   * Of the hops, take the LAST: that is the one the proxy appended itself.
+   * Anything before it was supplied by the client and is exactly as
+   * trustworthy as the raw header was. This assumes a single proxy, which is
+   * the topology deploy/README.md describes; chain two and the lockout
+   * becomes per-proxy rather than per-client, which fails safe.
+   *
+   * A proxy running on another host is not covered - it would connect from a
+   * real address, so its clients would share one bucket and could lock each
+   * other out. Run the proxy on the same box, as the deploy notes do.
+   */
   function clientIp(req) {
+    const socketIp = req.socket.remoteAddress || 'unknown';
+    if (!isLoopback(socketIp)) return socketIp;
+
     const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) return String(forwarded).split(',')[0].trim();
-    return req.socket.remoteAddress || 'unknown';
+    if (!forwarded) return socketIp;
+    const hops = String(forwarded).split(',');
+    return hops[hops.length - 1].trim() || socketIp;
   }
 
   function lockedOut(ip) {
@@ -100,13 +132,26 @@ function createAuth({ dataDir, log }) {
     return !!record && record.count >= MAX_ATTEMPTS && Date.now() < record.until;
   }
 
+  // Records for addresses that have served their lockout are dead weight, and
+  // without this the map only ever grows - one entry per address that ever
+  // guessed wrong. Harmless for a household, but it is the kind of thing that
+  // should not depend on who is allowed to reach the port.
+  function pruneAttempts(now) {
+    if (attempts.size < 1000) return;
+    for (const [key, record] of attempts) {
+      if (now >= record.until) attempts.delete(key);
+    }
+  }
+
   function recordFailure(ip) {
+    const now = Date.now();
+    pruneAttempts(now);
     const record = attempts.get(ip) || { count: 0, until: 0 };
     // A fresh window once the previous lockout has expired, so the counter
     // doesn't stay permanently maxed out after one bad afternoon.
-    if (record.count >= MAX_ATTEMPTS && Date.now() >= record.until) record.count = 0;
+    if (record.count >= MAX_ATTEMPTS && now >= record.until) record.count = 0;
     record.count += 1;
-    record.until = Date.now() + LOCKOUT_MS;
+    record.until = now + LOCKOUT_MS;
     attempts.set(ip, record);
   }
 

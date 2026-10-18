@@ -101,8 +101,14 @@ front:
 JOMNETSCAN_BIND=127.0.0.1
 ```
 
-The app needs no other change; it already reads `X-Forwarded-For` for its
-login rate limiting.
+The app needs no other change. It reads `X-Forwarded-For` for its login rate
+limiting **only when the connection came from loopback** — i.e. from a proxy
+on the same box, which is the one place that header can be trusted. A proxy on
+a different host would connect from a real address, so its clients would share
+one lockout bucket; run the proxy on the same machine as the service. And if
+you leave the service bound to `0.0.0.0` as well as proxying it, the direct
+port is still there with no TLS — bind to `127.0.0.1` so the proxy is the only
+way in.
 
 Do not expose this to the internet. A list of every device on your network,
 behind one shared password, is not something to put on a public port.
