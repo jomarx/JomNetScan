@@ -151,6 +151,16 @@ can't offer.
 Alerts respect the **Notify me when a new device appears** switch. With it off,
 nothing is sent anywhere.
 
+## What it costs to run
+
+Measured on t610buntu2, a /24 with about 45 known devices, scanning on the
+default interval: **11m46s of CPU over 5h49m wall** — roughly 3% of one core —
+and a **87.7 MB** memory peak. Almost all of the CPU is spawning `ping`, in
+bursts during a sweep rather than steadily.
+
+That's small enough for a Pi or a shared box. If you're putting this somewhere
+tighter, the scan interval is the knob that matters, not the concurrency.
+
 ## If something doesn't work
 
 **No devices found, or every device shows offline.** Check `ping` works as the
