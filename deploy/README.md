@@ -126,6 +126,47 @@ JOMNETSCAN_BIND=192.168.68.16
 
 Check what you actually published with `ss -lntp | grep 8099`.
 
+### HTTPS over Tailscale, the easy way
+
+If the box is already on Tailscale, `tailscale serve` gives you a real
+Let's Encrypt certificate and an HTTPS address with no reverse proxy to
+configure. It's the cleanest way to get the password off the wire, and it's
+tailnet-only — not public.
+
+First enable **MagicDNS** and **HTTPS Certificates** in the tailnet admin
+console (the DNS page). Then:
+
+```bash
+sudo tailscale serve --bg --https=8444 http://127.0.0.1:8099
+tailscale serve status
+#   https://<host>.<tailnet>.ts.net:8444 (tailnet only)
+#   |-- / proxy http://127.0.0.1:8099
+```
+
+To undo it:
+
+```bash
+sudo tailscale serve --https=8444 off
+```
+
+Worth knowing:
+
+- **The first HTTPS request after setup takes ~30 seconds** while Tailscale
+  fetches the certificate. After that it renews itself.
+- **Pick an HTTPS port that isn't the app's own.** `--https=8099` collides with
+  the service if it binds `0.0.0.0`, because `tailscaled` wants the tailnet IP
+  on that port too. `8444`, or `443` if nothing else holds it, is clean.
+- **`--bg` makes it survive reboots** and `tailscaled` restarts.
+- The proxy connects from loopback, so the login lockout works correctly per
+  tailnet client through it — but only on the fix shipped here; make sure the
+  box is running it (`clientIp` loopback-only). With this, you can also set
+  `JOMNETSCAN_BIND=127.0.0.1` and the serve target stays `http://127.0.0.1:8099`
+  unchanged, so nothing on the LAN can reach it and the tailnet HTTPS address is
+  the only way in.
+- This is `serve`, which is tailnet-only. **Funnel** is the separate feature
+  that puts it on the public internet — don't; "do not expose this" above means
+  Funnel too.
+
 ## Telegram alerts
 
 Two values, and the second one is the part people get stuck on.
