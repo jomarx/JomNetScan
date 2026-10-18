@@ -1,0 +1,15 @@
+[Unit]
+Description=Check for JomNetScan updates hourly
+
+[Timer]
+# First check 10 minutes after boot, then every hour. The randomized delay
+# spreads the git fetch so a fleet of these doesn't hit the remote in lockstep.
+OnBootSec=10min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+# If the box was asleep over a scheduled run, do it on the next wake rather
+# than waiting a full hour.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=JomNetScan auto-update (fetch, fast-forward, restart)
+# Needs the network to reach the git remote.
+After=network-online.target
+Wants=network-online.target
+# Don't fight with a run already in progress, and don't bother if the main
+# service was stopped on purpose.
+After=jomnetscan.service
+
+[Service]
+Type=oneshot
+# No User= on purpose: this runs as root so it can write the root-owned
+# checkout and restart the service. The main service stays unprivileged; only
+# this short-lived unit is privileged, and only to do the update.
+ExecStart=/opt/jomnetscan/deploy/jomnetscan-update.sh
+
+# Optional overrides, same file the service reads - JOMNETSCAN_BRANCH etc.
+# EnvironmentFile=/etc/jomnetscan/env

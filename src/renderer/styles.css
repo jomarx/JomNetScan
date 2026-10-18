@@ -234,3 +234,64 @@ textarea { resize: vertical; }
    anything paints, so neither build flashes the other's controls. */
 .platform-web .desktop-only,
 .platform-desktop .web-only { display: none; }
+
+/* Auto-update readout at the top of Settings (web build). */
+.update-line {
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.update-line.behind {
+  background: #2a2410;
+  border-color: #4a3d12;
+  color: var(--new);
+}
+.update-line[hidden] { display: none; }
+
+/* --- Narrow screens -------------------------------------------------------
+   The desktop build is always a wide window; the web build is reached from
+   whatever is to hand, including a phone. Below 640px the six-column table
+   folds to identity + address (the rest is one tap away in the detail panel),
+   the detail panel becomes a full-screen sheet instead of a 340px rail, and
+   the toolbars wrap instead of overflowing. */
+@media (max-width: 640px) {
+  .topbar { padding: 12px 16px; gap: 10px; }
+  .topbar h1 { font-size: 15px; }
+  .brand-mark { width: 22px; height: 22px; }
+  .topbar-actions { gap: 8px; }
+  .topbar-actions button { padding: 7px 12px; white-space: nowrap; }
+  /* The textual status is what pushed "Settings" off the edge; the stat cards
+     and the progress bar already carry that information on a phone. */
+  .status { display: none; }
+
+  .stats { padding: 10px 16px 0; gap: 8px; }
+  .stat { flex: 1 1 calc(50% - 8px); min-width: 0; }
+
+  .toolbar { flex-wrap: wrap; padding: 12px 16px; gap: 10px; }
+  .toolbar input { order: -1; max-width: none; }   /* search on its own first row */
+
+  .table-wrap { padding: 0 16px 16px; }
+
+  /* Hide MAC, Vendor and Last seen; all three are in the detail panel on tap. */
+  .devices th:nth-child(n + 4),
+  .devices td:nth-child(n + 4) { display: none; }
+
+  /* The detail panel stops being a side rail and covers the list, with its
+     own close button already in place. */
+  .detail {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    z-index: 20;
+    border-left: none;
+    padding: 20px 16px;
+  }
+
+  /* Settings fills the width with a 16px gutter rather than sitting at 460px. */
+  .modal { padding: 16px; align-items: flex-start; }
+  .modal-card { width: 100%; max-height: calc(100vh - 32px); padding: 20px 16px; }
+}

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self';" />
   <title>JomNetScan</title>
@@ -90,6 +91,8 @@
     <div class="modal-card">
       <button class="close" id="settingsClose" title="Close">&times;</button>
       <h2>Settings</h2>
+
+      <p class="update-line web-only" id="updateStatus" hidden></p>
 
       <label class="row"><input type="checkbox" id="setAutoScan" /> <span>Scan automatically in the background</span></label>
       <label class="field">Scan every

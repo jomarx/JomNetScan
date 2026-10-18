@@ -167,6 +167,51 @@ bursts during a sweep rather than steadily.
 That's small enough for a Pi or a shared box. If you're putting this somewhere
 tighter, the scan interval is the knob that matters, not the concurrency.
 
+## Keeping it up to date automatically
+
+Two halves, because the service is deliberately unprivileged and its checkout is
+root-owned: the service can *see* that an update exists but can't *apply* one.
+
+**Seeing it.** The running service checks its git remote once an hour, read-only
+(`git ls-remote`, no write to the repo). When the deployed branch is behind,
+**Settings** shows an amber line saying so. That's it on the service side — it
+never touches its own code.
+
+**Applying it.** A separate root timer does the pull and restart. It's opt-in:
+
+```bash
+sudo cp /opt/jomnetscan/deploy/jomnetscan-update.service /etc/systemd/system/
+sudo cp /opt/jomnetscan/deploy/jomnetscan-update.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now jomnetscan-update.timer
+```
+
+Every hour it fetches, and **only if the remote is ahead** fast-forwards,
+`npm install --omit=dev`, and restarts the service. It tracks whatever branch is
+checked out, so it keeps working after you move from `web-server` to `main`
+without editing anything. A fast-forward is the whole safety: if you've made
+local commits, or the history diverged, it stops and leaves the running service
+untouched rather than rewriting anything.
+
+Check it by hand, or watch it:
+
+```bash
+sudo /opt/jomnetscan/deploy/jomnetscan-update.sh   # run once now
+systemctl list-timers jomnetscan-update.timer      # when it next fires
+journalctl -u jomnetscan-update.service            # what it did last time
+```
+
+A restart drops every open browser's live connection for a moment; they
+reconnect on their own, and a scan or ping in flight is abandoned. So the timer
+is a reasonable default for a home box, but if you'd rather pick your moment,
+skip the timer and run the script by hand when the amber line appears — or stay
+with the manual [Updating](#updating) steps below, which are the same thing
+without the automation.
+
+If you don't want automatic updates at all, just don't install the timer. The
+hourly in-UI check is still there and still only reads; nothing updates until
+you run the script.
+
 ## If something doesn't work
 
 **No devices found, or every device shows offline.** Check `ping` works as the
@@ -203,6 +248,14 @@ a bigger change than the names are worth.
 sees its own subnet. If the server is on Ethernet and your laptop is on a
 different VLAN or a guest SSID, the two will legitimately disagree about what's
 on "the network".
+
+**The update line shows an error, or never appears.** The in-UI check shells
+out to `git`. If git isn't installed, or `/opt/jomnetscan` isn't a checkout (you
+deployed from a tarball), the line hides itself — that's expected, and the
+auto-update timer won't work either; update by replacing the files. If it shows
+a "couldn't check" error, run `sudo -u jomnetscan git -C /opt/jomnetscan ls-remote origin`
+by hand to see why — usually no network, or a private repo the service user
+can't read.
 
 **Scans feel slow.** The defaults — 64 pings in flight, 1 second each — were
 measured against Windows, where spawning a process is expensive. Linux forks

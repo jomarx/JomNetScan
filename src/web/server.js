@@ -16,6 +16,7 @@ const net = require('../core/net/index.js');
 const oui = require('../core/oui.js');
 const ports = require('../core/ports.js');
 const { createAuth } = require('./auth.js');
+const { createUpdater } = require('./updater.js');
 const notify = require('./notify.js');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
@@ -44,6 +45,7 @@ let scanTimer = null;
 const store = new Store(DATA_DIR);
 const scanner = new Scanner();
 const auth = createAuth({ dataDir: DATA_DIR, log });
+const updater = createUpdater({ log });
 
 /** Every open EventSource connection. */
 const clients = new Set();
@@ -62,6 +64,7 @@ function buildState() {
     newBadgeMs: NEW_BADGE_MS,
     portScanning,
     pinging: pingSession ? pingSession.id : null,
+    update: updater.getState(),
   };
 }
 
@@ -515,6 +518,10 @@ function start() {
     log(`JomNetScan listening on http://${BIND}:${PORT} (${net.platform} backend)`);
     rescheduleAutoScan();
     runScan('startup');
+    // Hourly "are we behind the remote?" check. Read-only; the systemd timer
+    // in deploy/ is what actually applies an update. A state push on change so
+    // an open tab learns without waiting for the next scan.
+    updater.start((state) => { if (state.behind || state.error) pushState(); });
   });
 
   server.on('error', (err) => {
@@ -527,6 +534,7 @@ function start() {
   const shutdown = (signal) => {
     log(`${signal} received, shutting down`);
     stopPing();
+    updater.stop();
     if (scanTimer) clearInterval(scanTimer);
     for (const client of clients) client.end();
     server.close(() => process.exit(0));

@@ -450,6 +450,31 @@ function renderSettings() {
   $('ouiStatus').textContent = entries
     ? `${entries.toLocaleString()} vendor prefixes loaded.`
     : 'Not downloaded yet - vendors will show as blank.';
+
+  renderUpdate();
+}
+
+// The update line is web-only and driven entirely by the server's read-only
+// check. It never offers a button, because the running service can't update
+// itself under the hardened deploy - the systemd timer does that. This is the
+// readout so you can see it happen from the UI.
+function renderUpdate() {
+  const el = $('updateStatus');
+  if (!el) return;
+  const u = state.update;
+  if (!u || u.supported === false || !u.checkedAt) { el.hidden = true; return; }
+  el.hidden = false;
+  el.classList.toggle('behind', !!u.behind);
+  const when = new Date(u.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (u.behind) {
+    const from = (u.current || '').slice(0, 7);
+    const to = (u.latest || '').slice(0, 7);
+    el.textContent = `Update available on ${u.branch} (${from} → ${to}). It installs on its own within the hour; the service restarts when it does.`;
+  } else if (u.error) {
+    el.textContent = `Couldn't check for updates at ${when}: ${u.error}`;
+  } else {
+    el.textContent = `Up to date on ${u.branch}, checked ${when}.`;
+  }
 }
 
 function render() {

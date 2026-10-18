@@ -1,0 +1,7 @@
+# These run on the Linux server and must keep LF endings regardless of the
+# cloning machine's autocrlf setting - a CRLF in a shell script breaks its
+# shebang, and systemd is equally unforgiving.
+*.sh            text eol=lf
+*.service       text eol=lf
+*.timer         text eol=lf
+deploy/env*     text eol=lf
