@@ -103,8 +103,25 @@ class Store {
 
     for (const device of found) {
       const id = device.mac || `ip:${device.ip}`;
-      seen.add(id);
       const existing = this.devices[id];
+
+      // A device we have never seen, vouched for by nothing but a STALE
+      // neighbour row, is usually a cache ghost rather than an arrival: it
+      // was pinged during this very sweep and said nothing, and the kernel
+      // never re-confirmed it either. Two of those turned up within ten
+      // minutes on the first server install, both already stale before the
+      // baseline, and with alerts on they would have been a phone alert for
+      // devices that never left or rejoined.
+      //
+      // Only first sightings are held back, so nothing already in the list
+      // can vanish, and only where we have real neighbour state to go on -
+      // Windows reports confirmedVia 'ping', where a false negative is
+      // common and this rule would hide live devices. A genuine new arrival
+      // answers ARP, so it comes back REACHABLE on a later scan and lands
+      // then.
+      if (!existing && device.confirmedVia === 'neighbour' && !device.confirmed) continue;
+
+      seen.add(id);
 
       if (!existing) {
         const record = {

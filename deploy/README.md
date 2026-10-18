@@ -27,6 +27,12 @@ cd /opt/jomnetscan
 sudo npm install --omit=dev
 ```
 
+**While the web build is still on the `web-server` branch**, add
+`--branch web-server` to that clone — a plain clone gets the default branch,
+which has no `src/web/` and will not start. Once the branch is merged this
+note stops applying; check whether `src/web/server.js` exists before going
+looking for a problem.
+
 Optionally fetch the vendor database now, so manufacturer names are there from
 the first scan (you can also do this later from Settings):
 
@@ -101,6 +107,19 @@ login rate limiting.
 Do not expose this to the internet. A list of every device on your network,
 behind one shared password, is not something to put on a public port.
 
+**`0.0.0.0` is wider than "the LAN" if the box is on a VPN.** On a machine
+running Tailscale, binding to all interfaces also publishes the service on the
+tailnet address — anyone on your tailnet, including a device you've shared it
+with, can reach it. That's authenticated and not public, so it may be exactly
+what you want, but it isn't what "LAN-only" sounds like. To keep it to the
+wired LAN, bind to the specific address instead:
+
+```
+JOMNETSCAN_BIND=192.168.68.16
+```
+
+Check what you actually published with `ss -lntp | grep 8099`.
+
 ## Telegram alerts
 
 Two values, and the second one is the part people get stuck on.
@@ -146,15 +165,23 @@ sudo -u jomnetscan ping -c1 -W1 192.168.1.1
 If the sysctl has been narrowed, either widen it or add
 `AmbientCapabilities=CAP_NET_RAW` to the unit.
 
-**No announced names.** Check whether avahi already holds the mDNS port:
+**No announced names.** Check what already holds the mDNS port:
 
 ```bash
 sudo ss -lunp | grep 5353
 ```
 
-`multicast-dns` binds with `SO_REUSEADDR` so the two usually coexist. If they
-don't, discovery degrades to "no announced names" rather than failing the
-scan — the devices still appear, they just need naming by hand.
+`multicast-dns` binds with `SO_REUSEADDR` so two listeners usually coexist. If
+they don't, discovery degrades to "no announced names" rather than failing the
+scan — the devices still appear, they just need naming by hand, and reverse DNS
+and NetBIOS still name some of them.
+
+On t610buntu2 this is what happens, and the holder is not avahi (which is
+inactive) but **Home Assistant** — its zeroconf, in a host-network container,
+holding `*:5353`. Nothing announced a name there; `nmblookup` still found the
+Windows boxes. If you want announced names on a box that also runs Home
+Assistant, you'd have to give one of them its own network namespace, which is
+a bigger change than the names are worth.
 
 **Only some devices appear.** ARP doesn't cross a router, so the server only
 sees its own subnet. If the server is on Ethernet and your laptop is on a

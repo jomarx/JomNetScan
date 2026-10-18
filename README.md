@@ -288,6 +288,15 @@ run, and the dropdown keeps showing the pinned adapter marked *not connected*.
   unreliable — devices that are plainly up still render hollow. Treat a hollow
   dot on Windows as "no information", not as "probably gone". Hovering a dot
   says which of the two you're looking at.
+- **A brand-new device has to be confirmed before it's recorded, on Linux.**
+  A stale neighbour entry for a device that left is indistinguishable from a
+  device that arrived, if all you have is the entry — and on the first server
+  install two of those turned up within ten minutes and would have been a
+  phone alert for devices that never went anywhere. So a first sighting backed
+  by nothing but a `STALE` row is skipped, and lands on a later scan once the
+  kernel confirms it. Devices already in your list are never held back this
+  way, and the rule is off on Windows, where an unconfirmed device is usually
+  just a missed ping.
 - **Randomized MACs.** Phones that rotate their MAC per network will appear as
   a new device when they rotate. There's no fix for this from outside the
   device; the app at least labels them so you know what you're looking at.

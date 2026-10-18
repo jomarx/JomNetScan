@@ -5,7 +5,7 @@
 // The app itself can do the same from Settings, writing into its userData folder.
 
 const path = require('path');
-const oui = require('../src/main/oui.js');
+const oui = require('../src/core/oui.js');
 
 const dest = path.join(__dirname, '..', 'data', 'oui.json');
 
