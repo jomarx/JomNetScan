@@ -108,7 +108,21 @@ function sendTelegram(settings, { title, message }) {
   return post(`https://api.telegram.org/bot${encodeURIComponent(token)}/sendMessage`, {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text: `${title}\n${message}`, disable_notification: false }),
-  }).then((r) => ({ channel: 'telegram', ...r }));
+  }).then((r) => ({ channel: 'telegram', ...r, error: r.ok ? null : telegramReason(r) }));
+}
+
+/**
+ * Telegram says why in the body - "Bad Request: chat not found" - and a bare
+ * "HTTP 400" doesn't tell you whether to fix the token or the chat id.
+ */
+function telegramReason(result) {
+  try {
+    const { description } = JSON.parse(result.body);
+    if (typeof description === 'string' && description) {
+      return `${description.slice(0, 200)} (HTTP ${result.status})`;
+    }
+  } catch { /* not JSON - a proxy page, say */ }
+  return result.error;
 }
 
 function sendWebhook(settings, { title, message, devices }) {
