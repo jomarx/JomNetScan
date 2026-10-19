@@ -235,6 +235,9 @@ textarea { resize: vertical; }
 .platform-web .desktop-only,
 .platform-desktop .web-only { display: none; }
 
+/* Side-by-side buttons in Settings (Backup). */
+.button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* Auto-update readout at the top of Settings (web build). */
 .update-line {
   margin: 0 0 16px;

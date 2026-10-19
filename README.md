@@ -334,7 +334,36 @@ and on the web build a `secret` file used to sign session cookies. Deleting
 `devices.json` resets the app; everything is then "new" again.
 
 The two builds keep separate data. Pointing them at the same directory is not
-supported — they'd both write `devices.json` with no coordination.
+supported — they'd both write `devices.json` with no coordination. To move
+names and history between them, use a backup instead.
+
+### Backup: export and import
+
+**Settings → Backup** has **Export devices** and **Import devices**, in both
+builds. The desktop app asks where to save or what to open. The web build
+downloads `jomnetscan-backup-YYYY-MM-DD.json` and uploads the file you pick.
+
+The file holds every device the app knows: its name, notes, first and last
+seen, vendor and discovered names, and the last port scan. There's no separate
+scan log. Those records *are* the history. Settings are left out on purpose:
+on the web build they hold the Telegram token and webhook URL, and a backup is
+exactly the kind of file that gets copied around and forgotten.
+
+Importing merges; it never deletes anything:
+
+- A device this install doesn't know is added as offline and isn't badged
+  **New**, so importing doesn't set off alerts. The next scan marks the ones
+  actually present online.
+- For a device it does know, the file's name and notes win where the file has
+  them. A blank in the file never erases a name or note here. Vendor and
+  discovered names only fill blanks. First and last seen widen to cover both,
+  and the newer port scan is kept.
+- IP address and online state are left as this install last saw them.
+
+Importing the same file twice changes nothing. A bare `devices.json` copied
+out of either build's data folder imports too, so an existing install can be
+moved without exporting first. The server caps an upload at 5 MB, which is
+about 10,000 devices.
 
 `settings.json` holds the Telegram bot token in plain text, which is why the
 systemd unit sets `StateDirectoryMode=0700`. The token is never sent back to a
@@ -376,6 +405,7 @@ src/core/             no Electron, no HTTP — shared by both front ends
   discover.js           mDNS and SSDP name discovery
   ports.js              the curated port list and the TCP connect scan
   migrate.js            startup housekeeping both front ends need
+  backup.js             export/import of the device list, and the merge
 src/desktop/          the Electron app
   main.js               window, tray, notifications, IPC
   preload.js            the narrow API the UI is allowed to call

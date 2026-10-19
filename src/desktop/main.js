@@ -1,8 +1,9 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const {
-  app, BrowserWindow, ipcMain, Notification, Tray, Menu, shell, nativeImage,
+  app, BrowserWindow, ipcMain, Notification, Tray, Menu, shell, nativeImage, dialog,
 } = require('electron');
 
 const { Store, NEW_BADGE_MS } = require('../core/store.js');
@@ -11,6 +12,7 @@ const net = require('../core/net/index.js');
 const oui = require('../core/oui.js');
 const ports = require('../core/ports.js');
 const { migrateStore } = require('../core/migrate.js');
+const backup = require('../core/backup.js');
 
 let mainWindow = null;
 let tray = null;
@@ -350,6 +352,40 @@ ipcMain.handle('oui:download', async () => {
     return { ok: true, entries: result.entries };
   } catch (err) {
     return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('data:export', async () => {
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export devices',
+    defaultPath: path.join(app.getPath('documents'), backup.backupFileName()),
+    filters: [{ name: 'JomNetScan backup', extensions: ['json'] }],
+  });
+  if (canceled || !filePath) return { cancelled: true };
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(backup.buildBackup(store), null, 2));
+    return { ok: true, count: store.list().length };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('data:import', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import devices',
+    properties: ['openFile'],
+    filters: [{ name: 'JomNetScan backup', extensions: ['json'] }],
+  });
+  if (canceled || !filePaths || !filePaths.length) return { ...buildState(), cancelled: true };
+  try {
+    const data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
+    const imported = backup.importBackup(store, backup.parseBackup(data));
+    pushState();
+    return { ...buildState(), imported };
+  } catch (err) {
+    // A JSON.parse message ("Unexpected token...") means nothing to anyone.
+    const error = err instanceof SyntaxError ? 'That file is not a JomNetScan backup.' : err.message;
+    return { ...buildState(), error };
   }
 });
 

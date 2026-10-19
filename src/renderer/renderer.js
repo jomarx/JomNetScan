@@ -640,6 +640,42 @@ $('updateBtn').addEventListener('click', async () => {
   }
 });
 
+$('exportBtn').addEventListener('click', async () => {
+  const status = $('backupStatus');
+  const result = await api.exportData();
+  if (result.cancelled) return;
+  if (result.error) status.textContent = `Export failed: ${result.error}`;
+  else if (result.count !== undefined) status.textContent = `Exported ${result.count} devices.`;
+  else status.textContent = 'Export downloaded.';
+});
+
+$('importBtn').addEventListener('click', async () => {
+  const btn = $('importBtn');
+  const status = $('backupStatus');
+  btn.disabled = true;
+  try {
+    const result = await api.importData();
+    if (result.cancelled) return;
+    if (result.devices) applyState(result);
+    if (result.error) {
+      status.textContent = result.error;
+      return;
+    }
+    const s = result.imported;
+    const parts = [
+      s.added && `${s.added} added`,
+      s.updated && `${s.updated} updated`,
+      s.unchanged && `${s.unchanged} already up to date`,
+      s.skipped && `${s.skipped} unreadable and skipped`,
+    ].filter(Boolean);
+    status.textContent = `Imported: ${parts.join(', ')}.`;
+  } catch (err) {
+    status.textContent = `Import failed: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $('testAlertBtn').addEventListener('click', async () => {
   const btn = $('testAlertBtn');
   const status = $('testAlertStatus');

@@ -18,6 +18,7 @@ const ports = require('../core/ports.js');
 const { createAuth } = require('./auth.js');
 const { createUpdater } = require('./updater.js');
 const notify = require('./notify.js');
+const backup = require('../core/backup.js');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
 const BUNDLED_OUI = path.join(__dirname, '..', '..', 'data', 'oui.json');
@@ -30,6 +31,9 @@ const DATA_DIR = process.env.JOMNETSCAN_DATA
 
 const PING_SESSION_MAX = 120;
 const MAX_BODY_BYTES = 64 * 1024;
+// A backup is the whole device list. A few hundred devices with notes and port
+// scans is well under this; the cap is only there so a mistake can't eat memory.
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 const log = (...args) => console.log(new Date().toISOString(), ...args);
 
@@ -256,13 +260,13 @@ function sendJson(res, value, status = 200) {
   res.end(body);
 }
 
-function readBody(req) {
+function readBody(req, limit = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on('data', (chunk) => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > limit) {
         reject(new Error('Request body too large'));
         req.destroy();
         return;
@@ -506,6 +510,33 @@ async function handle(req, res) {
       ouiDownloading = false;
       syncBusyFlag();
     }
+    return;
+  }
+
+  if (route === '/api/export' && req.method === 'GET') {
+    const body = Buffer.from(JSON.stringify(backup.buildBackup(store), null, 2));
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${backup.backupFileName()}"`,
+      'Content-Length': body.length,
+      'Cache-Control': 'no-store',
+    });
+    res.end(body);
+    return;
+  }
+
+  if (route === '/api/import' && req.method === 'POST') {
+    let summary;
+    try {
+      const parsed = backup.parseBackup(await readBody(req, MAX_IMPORT_BYTES));
+      summary = backup.importBackup(store, parsed);
+    } catch (err) {
+      sendJson(res, { error: err.message }, 400);
+      return;
+    }
+    log(`Imported a backup: ${summary.added} added, ${summary.updated} updated, ${summary.unchanged} unchanged, ${summary.skipped} skipped`);
+    pushState();
+    sendJson(res, { ...buildState(), imported: summary });
     return;
   }
 

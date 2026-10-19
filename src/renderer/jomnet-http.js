@@ -85,6 +85,49 @@ if (!window.jomnet) {
     testAlerts: () => request('/api/alerts/test', {}),
     applyUpdate: () => request('/api/update/apply', {}),
 
+    exportData: () => {
+      const link = document.createElement('a');
+      link.href = '/api/export';
+      link.download = '';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return Promise.resolve({ ok: true });
+    },
+
+    // Resolves with the state plus an `imported` summary, `error`, or
+    // `cancelled` - the same shape the desktop build returns.
+    importData: () => new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.addEventListener('cancel', () => resolve({ cancelled: true }));
+      input.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        if (!file) { resolve({ cancelled: true }); return; }
+        let data;
+        try {
+          data = JSON.parse(await file.text());
+        } catch {
+          resolve({ error: 'That file is not a JomNetScan backup.' });
+          return;
+        }
+        try {
+          const response = await fetch('/api/import', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+          if (response.status === 401) { window.location.href = '/login'; return; }
+          resolve(await response.json());
+        } catch (err) {
+          resolve({ error: `Import failed: ${err.message}` });
+        }
+      });
+      input.click();
+    }),
+
     // Meaningless on a server - the data lives on the server's disk, not
     // yours. The UI hides the button, but the method stays so nothing has to
     // check which front end it is running under before calling it.

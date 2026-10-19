@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('jomnet', {
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
   downloadOui: () => ipcRenderer.invoke('oui:download'),
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
+  exportData: () => ipcRenderer.invoke('data:export'),
+  importData: () => ipcRenderer.invoke('data:import'),
 
   onProgress: (cb) => {
     const handler = (_e, payload) => cb(payload);

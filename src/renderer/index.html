@@ -140,6 +140,19 @@
       </div>
 
       <hr />
+      <h3>Backup</h3>
+      <p class="hint">Every device with its name, notes, first and last seen, and port scans, as one
+        file. Works between the desktop app and the server in either direction. Settings aren't
+        included, so no alert tokens end up in the file.</p>
+      <p class="hint">Importing adds devices this list doesn't have and takes names and notes from
+        the file where it has them. Nothing here is deleted.</p>
+      <div class="button-row">
+        <button id="exportBtn" class="ghost">Export devices</button>
+        <button id="importBtn" class="ghost">Import devices</button>
+      </div>
+      <p class="hint" id="backupStatus"></p>
+
+      <hr />
       <h3>Vendor database</h3>
       <p class="hint" id="ouiStatus"></p>
       <p class="hint">Downloads the public IEEE MAC registry (about 4 MB) so device makers show up instead of blanks.</p>
