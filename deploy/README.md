@@ -208,64 +208,74 @@ bursts during a sweep rather than steadily.
 That's small enough for a Pi or a shared box. If you're putting this somewhere
 tighter, the scan interval is the knob that matters, not the concurrency.
 
-## Keeping it up to date automatically
+## Updating from the UI
 
 Two halves, because the service is deliberately unprivileged and its checkout is
-root-owned: the service can *see* that an update exists but can't *apply* one.
+root-owned: the service can *see* that an update exists and *ask* for one, but
+can't apply it.
 
 **Seeing it.** The running service checks its git remote once an hour, read-only
 (`git ls-remote`, no write to the repo). When the deployed branch is behind,
-**Settings** shows an amber line saying so. That's it on the service side — it
-never touches its own code.
+**Settings** shows an amber line and an **Update now** button.
 
-**Applying it.** A separate root timer does the pull and restart. It's opt-in:
+**Asking for it.** The button drops a file, `/var/lib/jomnetscan/update-requested`,
+and that's all the service does — it gets no new privileges. A root systemd
+*path* unit watches for that file and runs the update. Install it once:
 
 ```bash
 sudo cp /opt/jomnetscan/deploy/jomnetscan-update.service /etc/systemd/system/
-sudo cp /opt/jomnetscan/deploy/jomnetscan-update.timer /etc/systemd/system/
+sudo cp /opt/jomnetscan/deploy/jomnetscan-update.path /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now jomnetscan-update.timer
+sudo systemctl enable --now jomnetscan-update.path
 ```
 
-Every hour it fetches, and **only if the remote is ahead** fast-forwards,
-`npm install --omit=dev`, and restarts the service. It tracks whatever branch is
-checked out, so it keeps working after you move from `web-server` to `main`
-without editing anything. A fast-forward is the whole safety: if you've made
-local commits, or the history diverged, it stops and leaves the running service
-untouched rather than rewriting anything.
+Without it, a click just sits there; after a minute Settings says nothing has
+picked the request up and points here.
+
+**What a click does.** The update script deletes the request first (or the path
+unit would fire again), fetches, and **only if the remote is a fast-forward**
+pulls, runs `npm install --omit=dev`, and restarts the service. It tracks
+whatever branch is checked out, so it keeps working after you move from
+`web-server` to `main`. If you've made local commits, or the history diverged,
+it stops and changes nothing.
 
 **It never restarts in the middle of something.** While a scan, port scan, ping
 graph or vendor download is running, the service keeps a flag file at
-`/var/lib/jomnetscan/busy` naming what's in flight. The update waits for it to
-clear — before pulling, and again just before restarting, since a scheduled
-scan can start while `npm install` runs — for up to 15 minutes each time
-(`JOMNETSCAN_UPDATE_WAIT`, in seconds). If it's still busy after that it gives
-up until the next hour; if the code was already pulled by then, the next run
-does the owed restart even though it finds nothing new to fetch. A flag left by
-a stopped service is ignored, and it uses `try-restart`, so a service you
+`/var/lib/jomnetscan/busy`. The update waits for it to clear — before pulling,
+and again just before restarting, since a scheduled scan can start while
+`npm install` runs — for up to 15 minutes each time (`JOMNETSCAN_UPDATE_WAIT`,
+in seconds). If it's still busy after that, it gives up and says so; if the code
+was already pulled by then, Settings offers **Restart now** instead. A flag left
+by a stopped service is ignored, and it uses `try-restart`, so a service you
 stopped on purpose stays stopped.
 
-Check it by hand, or watch it:
+**Afterwards** Settings shows how it went — *Updated abc1234 → def5678*, *still
+busy*, *not a fast-forward*, or the command that failed — for a day. The page
+reconnects on its own after the restart.
+
+The script runs as root and reads nothing from the service's directory except
+whether files exist; its result goes through a fresh `mktemp` file renamed into
+place, so a compromised service can't use it to read or write anything else.
+The thing to be aware of is the other direction: whoever can push to the branch
+can run code as root on this box, the script included, the moment you click.
+
+To run it yourself, or see what it did:
 
 ```bash
 sudo /opt/jomnetscan/deploy/jomnetscan-update.sh   # run once now
-systemctl list-timers jomnetscan-update.timer      # when it next fires
 journalctl -u jomnetscan-update.service            # what it did last time
 ```
 
-A restart still drops every open browser's live connection for a moment; they
-reconnect on their own. If you'd rather pick your moment, skip the timer and run
-the script by hand when the amber line appears — or stay with the manual
-[Updating](#updating) steps below, which are the same thing without the
-automation (and without the wait for idle).
+**Installing on a box running an older build:** update by hand once first (see
+[Updating](#updating)). The button and the busy flag come from the service, so
+an older service has neither.
 
-**Installing the timer on a box running an older build:** update by hand once
-first. The busy flag comes from the service, so a service from before it existed
-never writes one, and the timer's first update would restart it without waiting.
+### Or hourly, without asking
 
-If you don't want automatic updates at all, just don't install the timer. The
-hourly in-UI check is still there and still only reads; nothing updates until
-you run the script.
+If you'd rather not click, `deploy/jomnetscan-update.timer` runs the same
+script every hour, with the same waits. It's opt-in; install the `.timer` in
+place of (or as well as) the `.path` above and `enable --now` it. A timer run
+doesn't write a result to Settings — nobody asked — so check the journal.
 
 ## If something doesn't work
 
@@ -307,7 +317,7 @@ on "the network".
 **The update line shows an error, or never appears.** The in-UI check shells
 out to `git`. If git isn't installed, or `/opt/jomnetscan` isn't a checkout (you
 deployed from a tarball), the line hides itself — that's expected, and the
-auto-update timer won't work either; update by replacing the files. If it shows
+update button won't appear either; update by replacing the files. If it shows
 a "couldn't check" error, run `sudo -u jomnetscan git -C /opt/jomnetscan ls-remote origin`
 by hand to see why — usually no network, or a private repo the service user
 can't read.

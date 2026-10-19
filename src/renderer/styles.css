@@ -250,7 +250,17 @@ textarea { resize: vertical; }
   border-color: #4a3d12;
   color: var(--new);
 }
-.update-line[hidden] { display: none; }
+.update-line[hidden],
+.update-line [hidden] { display: none; }
+.update-line p { margin: 0; }
+.update-line button { margin-top: 8px; padding: 5px 12px; font-size: 12px; }
+.update-line .update-result {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.update-line .update-result.bad { color: var(--danger); }
 
 /* --- Narrow screens -------------------------------------------------------
    The desktop build is always a wide window; the web build is reached from

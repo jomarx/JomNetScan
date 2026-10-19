@@ -454,27 +454,61 @@ function renderSettings() {
   renderUpdate();
 }
 
-// The update line is web-only and driven entirely by the server's read-only
-// check. It never offers a button, because the running service can't update
-// itself under the hardened deploy - the systemd timer does that. This is the
-// readout so you can see it happen from the UI.
+// The update line is web-only. The server checks git hourly; the button only
+// asks for an update - a root path unit on the server does the work, waiting
+// for anything running to finish first - so this mostly reports progress.
+let updateNote = null;
+
 function renderUpdate() {
   const el = $('updateStatus');
   if (!el) return;
   const u = state.update;
-  if (!u || u.supported === false || !u.checkedAt) { el.hidden = true; return; }
-  el.hidden = false;
-  el.classList.toggle('behind', !!u.behind);
-  const when = new Date(u.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (u.behind) {
-    const from = (u.current || '').slice(0, 7);
-    const to = (u.latest || '').slice(0, 7);
-    el.textContent = `Update available on ${u.branch} (${from} → ${to}). It installs on its own within the hour; the service restarts when it does.`;
-  } else if (u.error) {
-    el.textContent = `Couldn't check for updates at ${when}: ${u.error}`;
-  } else {
-    el.textContent = `Up to date on ${u.branch}, checked ${when}.`;
+  const result = u && u.result;
+  if (!u || u.supported === false || (!u.checkedAt && !u.request && !result)) {
+    el.hidden = true;
+    return;
   }
+  el.hidden = false;
+  const short = (sha) => (sha || '').slice(0, 7);
+  const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  let text;
+  let button = null;
+  if (u.request === 'queued') {
+    text = 'Update requested. It starts as soon as nothing is running - a scan, port scan or ping graph.';
+  } else if (u.request === 'stalled') {
+    text = "Update requested, but nothing on the server has picked it up. Is jomnetscan-update.path installed? See deploy/README.md.";
+  } else if (u.request === 'running') {
+    text = "Updating... the service restarts when it's done and this page reconnects on its own.";
+  } else if (u.behind) {
+    text = `Update available on ${u.branch} (${short(u.current)} → ${short(u.latest)}).`;
+    button = 'Update now';
+  } else if (u.restartNeeded) {
+    text = `${short(u.current)} is installed but this is still running ${short(u.running)}.`;
+    button = 'Restart now';
+  } else if (u.error) {
+    text = `Couldn't check for updates at ${time(u.checkedAt)}: ${u.error}`;
+  } else if (u.checkedAt) {
+    text = `Up to date on ${u.branch}, checked ${time(u.checkedAt)}.`;
+  } else {
+    text = 'Checking for updates...';
+  }
+  el.classList.toggle('behind', !!button || (!!u.request && u.request !== 'lost'));
+  $('updateText').textContent = text;
+  const btn = $('updateBtn');
+  btn.hidden = !button;
+  btn.disabled = false;
+  if (button) btn.textContent = button;
+
+  // The last update you asked for, so a click isn't silent once it finishes.
+  const resultEl = $('updateResult');
+  const lostNote = u.request === 'lost'
+    ? "The last update didn't report back. Check journalctl -u jomnetscan-update on the server."
+    : null;
+  const note = updateNote || lostNote || (result && !u.request ? `${time(result.finishedAt)}: ${result.message}` : null);
+  resultEl.hidden = !note;
+  resultEl.textContent = note || '';
+  resultEl.classList.toggle('bad', !updateNote && (!!lostNote || (!!result && result.status === 'failed')));
 }
 
 function render() {
@@ -589,6 +623,22 @@ bindSetting('setTelegramToken', 'telegramToken', (el) => el.value.trim());
 bindSetting('setTelegramChatId', 'telegramChatId', (el) => el.value.trim());
 bindSetting('setWebhookUrl', 'webhookUrl', (el) => el.value.trim());
 bindSetting('setWebhookFormat', 'webhookFormat', (el) => el.value);
+
+$('updateBtn').addEventListener('click', async () => {
+  const btn = $('updateBtn');
+  btn.disabled = true;
+  updateNote = null;
+  try {
+    const next = await api.applyUpdate();
+    // A 409 (already requested, already current) still carries the state.
+    if (next.skipped) updateNote = next.skipped;
+    applyState(next);
+  } catch (err) {
+    updateNote = `Could not request the update: ${err.message}`;
+    btn.disabled = false;
+    renderUpdate();
+  }
+});
 
 $('testAlertBtn').addEventListener('click', async () => {
   const btn = $('testAlertBtn');

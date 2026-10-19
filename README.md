@@ -383,12 +383,12 @@ src/web/              the server
   server.js             routes, SSE, static files
   auth.js               password check, signed session cookie
   notify.js             Telegram and webhook delivery, secret masking
-  updater.js            hourly read-only "are we behind the remote?" check
+  updater.js            hourly "are we behind?" check; passes on Update now
 src/renderer/         the UI, served unchanged by both
   index.html styles.css renderer.js
   jomnet-http.js        fetch + EventSource shim; no-ops under Electron
 src/assets/           generated tray and window icons
-deploy/               systemd units (service + update timer) and install notes
+deploy/               systemd units (service, update on click or hourly) and install notes
 ```
 
 The UI is plain HTML, CSS and JavaScript — no framework, no build step. It

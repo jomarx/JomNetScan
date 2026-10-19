@@ -46,7 +46,7 @@ let scanTimer = null;
 const store = new Store(DATA_DIR);
 const scanner = new Scanner();
 const auth = createAuth({ dataDir: DATA_DIR, log });
-const updater = createUpdater({ log });
+const updater = createUpdater({ log, dataDir: DATA_DIR });
 
 /** Every open EventSource connection. */
 const clients = new Set();
@@ -374,6 +374,13 @@ const ACTIONS = {
   '/api/ports/scan': async (body) => { await scanDevicePorts(body.id); },
   '/api/ping/start': (body) => { startPing(body.id); },
   '/api/ping/stop': () => { stopPing(); },
+  '/api/update/apply': () => {
+    // Only drops a request file; the root path unit does the work. See
+    // updater.js and deploy/jomnetscan-update.path.
+    const reason = updater.refusal();
+    if (reason) throw new Conflict(reason);
+    updater.request();
+  },
   '/api/settings': (body) => {
     // An untouched secret field comes back as its mask; writing that through
     // would silently destroy the token it was standing in for.
@@ -571,10 +578,10 @@ function start() {
     log(`JomNetScan listening on http://${BIND}:${PORT} (${net.platform} backend)`);
     rescheduleAutoScan();
     runScan('startup');
-    // Hourly "are we behind the remote?" check. Read-only; the systemd timer
-    // in deploy/ is what actually applies an update. A state push on change so
-    // an open tab learns without waiting for the next scan.
-    updater.start((state) => { if (state.behind || state.error) pushState(); });
+    // Hourly "are we behind the remote?" check, plus the progress of an update
+    // someone asked for. A push on every change so an open tab learns without
+    // waiting for the next scan.
+    updater.start(() => pushState());
   });
 
   server.on('error', (err) => {

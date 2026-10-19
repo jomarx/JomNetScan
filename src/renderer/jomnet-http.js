@@ -83,6 +83,7 @@ if (!window.jomnet) {
     updateSettings: (patch) => request('/api/settings', patch),
     downloadOui: () => request('/api/oui/download', {}),
     testAlerts: () => request('/api/alerts/test', {}),
+    applyUpdate: () => request('/api/update/apply', {}),
 
     // Meaningless on a server - the data lives on the server's disk, not
     // yours. The UI hides the button, but the method stays so nothing has to

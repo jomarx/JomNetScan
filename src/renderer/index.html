@@ -92,7 +92,11 @@
       <button class="close" id="settingsClose" title="Close">&times;</button>
       <h2>Settings</h2>
 
-      <p class="update-line web-only" id="updateStatus" hidden></p>
+      <div class="update-line web-only" id="updateStatus" hidden>
+        <p id="updateText"></p>
+        <button id="updateBtn" class="primary" hidden>Update now</button>
+        <p class="update-result" id="updateResult" hidden></p>
+      </div>
 
       <label class="row"><input type="checkbox" id="setAutoScan" /> <span>Scan automatically in the background</span></label>
       <label class="field">Scan every

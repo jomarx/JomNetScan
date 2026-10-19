@@ -1,5 +1,5 @@
 [Unit]
-Description=JomNetScan auto-update (fetch, fast-forward, restart)
+Description=JomNetScan update (fetch, fast-forward, restart)
 # Needs the network to reach the git remote.
 After=network-online.target
 Wants=network-online.target
@@ -15,7 +15,7 @@ Type=oneshot
 ExecStart=/opt/jomnetscan/deploy/jomnetscan-update.sh
 # The script can wait up to twice JOMNETSCAN_UPDATE_WAIT (default 15 min) for
 # the service to go idle - once before pulling, once before restarting. Cap the
-# whole run so a wedged flag can never pile timer runs up behind it.
+# whole run so a wedged flag can never pile runs up behind it.
 TimeoutStartSec=45min
 
 # Optional overrides, same file the service reads - JOMNETSCAN_BRANCH etc.

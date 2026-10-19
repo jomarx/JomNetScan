@@ -1,0 +1,13 @@
+[Unit]
+Description=Run a JomNetScan update when the UI asks for one
+
+[Path]
+# The service writes this when someone clicks "Update now". It's the only
+# thing the unprivileged service can do towards an update; everything else
+# happens in the root jomnetscan-update.service this starts, which deletes the
+# file first thing so this doesn't fire again.
+PathExists=/var/lib/jomnetscan/update-requested
+Unit=jomnetscan-update.service
+
+[Install]
+WantedBy=paths.target
