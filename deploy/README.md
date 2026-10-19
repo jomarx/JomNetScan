@@ -322,6 +322,26 @@ a "couldn't check" error, run `sudo -u jomnetscan git -C /opt/jomnetscan ls-remo
 by hand to see why — usually no network, or a private repo the service user
 can't read.
 
+**Update now never appears after a push.** The check is hourly, starting 15
+seconds after the service starts, so a fresh push can take up to an hour to show
+up. Restarting the service checks again straight away.
+
+**Update now says nothing picked the request up.** The path unit isn't running.
+Check it, then try the root half on its own, without the UI, by writing the
+request exactly as the service would:
+
+```bash
+systemctl status jomnetscan-update.path        # should be active (waiting)
+sudo runuser -u jomnetscan -- touch /var/lib/jomnetscan/update-requested
+journalctl -u jomnetscan-update.service -n 20   # one run, then it stops
+sudo cat /var/lib/jomnetscan/update-result.json
+```
+
+The request file should be gone afterwards, and the result owned by
+`jomnetscan`, mode 600. If the checkout was already current this takes the
+restart path, so expect the service to restart (once whatever is running
+finishes).
+
 **Scans feel slow.** The defaults — 64 pings in flight, 1 second each — were
 measured against Windows, where spawning a process is expensive. Linux forks
 far more cheaply, so there is probably headroom. Time a scan in the journal,
