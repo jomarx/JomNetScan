@@ -339,17 +339,38 @@ names and history between them, use a backup instead.
 
 ### Backup: export and import
 
-**Settings → Backup** has **Export devices** and **Import devices**, in both
+**Settings → Backup** has **Export backup** and **Import backup**, in both
 builds. The desktop app asks where to save or what to open. The web build
 downloads `jomnetscan-backup-YYYY-MM-DD.json` and uploads the file you pick.
 
 The file holds every device the app knows: its name, notes, first and last
 seen, vendor and discovered names, and the last port scan. There's no separate
-scan log. Those records *are* the history. Settings are left out on purpose:
-on the web build they hold the Telegram token and webhook URL, and a backup is
-exactly the kind of file that gets copied around and forgotten.
+scan log. Those records *are* the history.
 
-Importing merges; it never deletes anything:
+It holds the settings too, except the two secrets. The web build has an
+**Export the Telegram token and webhook URL too** checkbox, off unless you tick
+it. Either value lets whoever holds the file send alerts as you, and a backup
+is exactly the kind of file that gets copied around and forgotten. Left off,
+the file still carries the chat id and webhook format.
+
+**Importing also restores settings** is ticked by default. Untick it to bring
+in devices only. When settings are restored, anything that doesn't fit this
+install is left as it was:
+
+- The ping timeout and concurrency only move between installs of the same
+  kind (desktop to desktop, server to server). They were tuned on that kind of
+  machine.
+- A network interface this machine doesn't have is kept as it was, and the
+  status line says so.
+- A blank token, chat id or webhook URL in the file never erases one set
+  here, so a backup made without secrets keeps the ones you have.
+- The desktop app ignores the alert settings, and the server ignores
+  **Minimize to tray**.
+
+An older backup with no settings in it imports its devices and leaves the
+settings alone.
+
+Importing devices merges; it never deletes anything:
 
 - A device this install doesn't know is added as offline and isn't badged
   **New**, so importing doesn't set off alerts. The next scan marks the ones
@@ -368,7 +389,8 @@ about 10,000 devices.
 `settings.json` holds the Telegram bot token in plain text, which is why the
 systemd unit sets `StateDirectoryMode=0700`. The token is never sent back to a
 browser in full: the UI shows a mask, and saving the mask leaves the stored
-value alone.
+value alone. The one exception is an export with the secrets box ticked, and
+the server logs each one.
 
 ## The icon
 
@@ -405,7 +427,7 @@ src/core/             no Electron, no HTTP — shared by both front ends
   discover.js           mDNS and SSDP name discovery
   ports.js              the curated port list and the TCP connect scan
   migrate.js            startup housekeeping both front ends need
-  backup.js             export/import of the device list, and the merge
+  backup.js             export/import of devices and settings, and the merge
 src/desktop/          the Electron app
   main.js               window, tray, notifications, IPC
   preload.js            the narrow API the UI is allowed to call

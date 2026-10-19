@@ -141,14 +141,19 @@
 
       <hr />
       <h3>Backup</h3>
-      <p class="hint">Every device with its name, notes, first and last seen, and port scans, as one
-        file. Works between the desktop app and the server in either direction. Settings aren't
-        included, so no alert tokens end up in the file.</p>
+      <p class="hint">Every device with its name, notes, first and last seen, and port scans, plus
+        your settings, as one file. Works between the desktop app and the server in either
+        direction.</p>
       <p class="hint">Importing adds devices this list doesn't have and takes names and notes from
-        the file where it has them. Nothing here is deleted.</p>
+        the file where it has them. Nothing here is deleted. Settings that don't fit this machine,
+        like a network interface it doesn't have, are left as they are.</p>
+      <label class="row web-only"><input type="checkbox" id="backupSecrets" /> <span>Export the
+        Telegram token and webhook URL too (anyone with the file can then send alerts as you)</span></label>
+      <label class="row"><input type="checkbox" id="backupRestoreSettings" checked /> <span>Importing
+        also restores settings</span></label>
       <div class="button-row">
-        <button id="exportBtn" class="ghost">Export devices</button>
-        <button id="importBtn" class="ghost">Import devices</button>
+        <button id="exportBtn" class="ghost">Export backup</button>
+        <button id="importBtn" class="ghost">Import backup</button>
       </div>
       <p class="hint" id="backupStatus"></p>
 

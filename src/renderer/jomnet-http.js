@@ -85,9 +85,9 @@ if (!window.jomnet) {
     testAlerts: () => request('/api/alerts/test', {}),
     applyUpdate: () => request('/api/update/apply', {}),
 
-    exportData: () => {
+    exportData: (opts = {}) => {
       const link = document.createElement('a');
-      link.href = '/api/export';
+      link.href = opts.includeSecrets === true ? '/api/export?secrets=1' : '/api/export';
       link.download = '';
       document.body.appendChild(link);
       link.click();
@@ -95,9 +95,10 @@ if (!window.jomnet) {
       return Promise.resolve({ ok: true });
     },
 
-    // Resolves with the state plus an `imported` summary, `error`, or
-    // `cancelled` - the same shape the desktop build returns.
-    importData: () => new Promise((resolve) => {
+    // Resolves with the state plus an `imported` summary (and `settingsRestore` when
+    // asked to restore them), `error`, or `cancelled` - the same shape the
+    // desktop build returns.
+    importData: (opts = {}) => new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.json,application/json';
@@ -113,7 +114,7 @@ if (!window.jomnet) {
           return;
         }
         try {
-          const response = await fetch('/api/import', {
+          const response = await fetch(`/api/import?settings=${opts.restoreSettings === true ? 1 : 0}`, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },

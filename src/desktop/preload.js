@@ -23,8 +23,8 @@ contextBridge.exposeInMainWorld('jomnet', {
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
   downloadOui: () => ipcRenderer.invoke('oui:download'),
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
-  exportData: () => ipcRenderer.invoke('data:export'),
-  importData: () => ipcRenderer.invoke('data:import'),
+  exportData: (opts = {}) => ipcRenderer.invoke('data:export', { includeSecrets: opts.includeSecrets === true }),
+  importData: (opts = {}) => ipcRenderer.invoke('data:import', { restoreSettings: opts.restoreSettings === true }),
 
   onProgress: (cb) => {
     const handler = (_e, payload) => cb(payload);

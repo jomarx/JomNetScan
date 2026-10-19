@@ -514,7 +514,12 @@ async function handle(req, res) {
   }
 
   if (route === '/api/export' && req.method === 'GET') {
-    const body = Buffer.from(JSON.stringify(backup.buildBackup(store), null, 2));
+    // The one place the real token and webhook URL ever reach a browser, and
+    // only when the export checkbox asked for them - so it goes in the journal.
+    const includeSecrets = url.searchParams.get('secrets') === '1';
+    const data = backup.buildBackup(store, { platform: 'web', includeSecrets });
+    if (data.secretsIncluded) log('Exported a backup including the Telegram token / webhook URL');
+    const body = Buffer.from(JSON.stringify(data, null, 2));
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
       'Content-Disposition': `attachment; filename="${backup.backupFileName()}"`,
@@ -526,17 +531,28 @@ async function handle(req, res) {
   }
 
   if (route === '/api/import' && req.method === 'POST') {
+    // Settings only on an explicit ?settings=1, so a request that doesn't say
+    // never changes them.
+    const restoreSettings = url.searchParams.get('settings') === '1';
     let summary;
+    let settings = null;
     try {
       const parsed = backup.parseBackup(await readBody(req, MAX_IMPORT_BYTES));
       summary = backup.importBackup(store, parsed);
+      if (restoreSettings) {
+        settings = backup.applySettings(store, parsed, { platform: 'web', interfaces: net.listInterfaces() });
+      }
     } catch (err) {
       sendJson(res, { error: err.message }, 400);
       return;
     }
-    log(`Imported a backup: ${summary.added} added, ${summary.updated} updated, ${summary.unchanged} unchanged, ${summary.skipped} skipped`);
+    log(`Imported a backup: ${summary.added} added, ${summary.updated} updated, ${summary.unchanged} unchanged, ${summary.skipped} skipped`
+      + (settings ? `; settings changed: ${settings.changed.join(', ') || 'none'}` : '')
+      + (restoreSettings && !settings ? '; the file had no settings' : ''));
+    if (settings && settings.changed.length) rescheduleAutoScan();
     pushState();
-    sendJson(res, { ...buildState(), imported: summary });
+    // Not `settings`: that key is the app's settings in the state payload.
+    sendJson(res, { ...buildState(), imported: summary, settingsRestore: settings });
     return;
   }
 

@@ -642,19 +642,48 @@ $('updateBtn').addEventListener('click', async () => {
 
 $('exportBtn').addEventListener('click', async () => {
   const status = $('backupStatus');
-  const result = await api.exportData();
+  // The secrets box only exists for the web build; on desktop it's hidden and
+  // there's no token to export anyway.
+  const includeSecrets = api.platform === 'web' && $('backupSecrets').checked;
+  const result = await api.exportData({ includeSecrets });
   if (result.cancelled) return;
+  const extra = includeSecrets ? ', including the Telegram token and webhook URL' : '';
   if (result.error) status.textContent = `Export failed: ${result.error}`;
-  else if (result.count !== undefined) status.textContent = `Exported ${result.count} devices.`;
-  else status.textContent = 'Export downloaded.';
+  else if (result.count !== undefined) status.textContent = `Exported ${result.count} devices and settings${extra}.`;
+  else status.textContent = `Export downloaded: devices and settings${extra}.`;
 });
+
+const SETTING_LABELS = {
+  autoScan: 'automatic scanning',
+  intervalMinutes: 'scan interval',
+  notifyOnNew: 'new-device notifications',
+  useNetbios: 'NetBIOS names',
+  discoverNames: 'announced names',
+  pingTimeoutMs: 'ping timeout',
+  concurrency: 'ping concurrency',
+  interfaceName: 'network interface',
+  minimizeToTray: 'tray',
+  telegramToken: 'Telegram token',
+  telegramChatId: 'Telegram chat id',
+  webhookUrl: 'webhook URL',
+  webhookFormat: 'webhook format',
+};
+
+function describeSettingsRestore(settings, asked) {
+  if (!settings) return asked ? ' The file has no settings in it (an older backup), so settings were left alone.' : '';
+  const changed = settings.changed.map((key) => SETTING_LABELS[key] || key);
+  let text = changed.length ? ` Settings restored: ${changed.join(', ')}.` : ' Settings were already the same.';
+  if (settings.notes.length) text += ` Kept: ${settings.notes.join('; ')}.`;
+  return text;
+}
 
 $('importBtn').addEventListener('click', async () => {
   const btn = $('importBtn');
   const status = $('backupStatus');
   btn.disabled = true;
   try {
-    const result = await api.importData();
+    const restoreSettings = $('backupRestoreSettings').checked;
+    const result = await api.importData({ restoreSettings });
     if (result.cancelled) return;
     if (result.devices) applyState(result);
     if (result.error) {
@@ -668,7 +697,8 @@ $('importBtn').addEventListener('click', async () => {
       s.unchanged && `${s.unchanged} already up to date`,
       s.skipped && `${s.skipped} unreadable and skipped`,
     ].filter(Boolean);
-    status.textContent = `Imported: ${parts.join(', ')}.`;
+    const devices = parts.length ? `Imported: ${parts.join(', ')}.` : 'No devices in the file.';
+    status.textContent = devices + describeSettingsRestore(result.settingsRestore, restoreSettings);
   } catch (err) {
     status.textContent = `Import failed: ${err.message}`;
   } finally {

@@ -355,33 +355,41 @@ ipcMain.handle('oui:download', async () => {
   }
 });
 
-ipcMain.handle('data:export', async () => {
+ipcMain.handle('data:export', async (_e, opts = {}) => {
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: 'Export devices',
+    title: 'Export devices and settings',
     defaultPath: path.join(app.getPath('documents'), backup.backupFileName()),
     filters: [{ name: 'JomNetScan backup', extensions: ['json'] }],
   });
   if (canceled || !filePath) return { cancelled: true };
   try {
-    fs.writeFileSync(filePath, JSON.stringify(backup.buildBackup(store), null, 2));
+    const data = backup.buildBackup(store, { platform: 'desktop', includeSecrets: !!(opts && opts.includeSecrets) });
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     return { ok: true, count: store.list().length };
   } catch (err) {
     return { ok: false, error: err.message };
   }
 });
 
-ipcMain.handle('data:import', async () => {
+ipcMain.handle('data:import', async (_e, opts = {}) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
-    title: 'Import devices',
+    title: 'Import backup',
     properties: ['openFile'],
     filters: [{ name: 'JomNetScan backup', extensions: ['json'] }],
   });
   if (canceled || !filePaths || !filePaths.length) return { ...buildState(), cancelled: true };
   try {
     const data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
-    const imported = backup.importBackup(store, backup.parseBackup(data));
+    const parsed = backup.parseBackup(data);
+    const imported = backup.importBackup(store, parsed);
+    let settings = null;
+    if (opts && opts.restoreSettings) {
+      settings = backup.applySettings(store, parsed, { platform: 'desktop', interfaces: net.listInterfaces() });
+      if (settings && settings.changed.length) rescheduleAutoScan();
+    }
     pushState();
-    return { ...buildState(), imported };
+    // Not `settings`: that key is the app's settings in the state payload.
+    return { ...buildState(), imported, settingsRestore: settings };
   } catch (err) {
     // A JSON.parse message ("Unexpected token...") means nothing to anyone.
     const error = err instanceof SyntaxError ? 'That file is not a JomNetScan backup.' : err.message;
