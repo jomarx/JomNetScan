@@ -272,11 +272,13 @@ textarea { resize: vertical; }
    the detail panel becomes a full-screen sheet instead of a 340px rail, and
    the toolbars wrap instead of overflowing. */
 @media (max-width: 640px) {
-  .topbar { padding: 12px 16px; gap: 10px; }
+  /* Three buttons don't fit beside the name on a phone, so they take a row of
+     their own and share it evenly. */
+  .topbar { padding: 12px 16px; gap: 10px; flex-wrap: wrap; }
   .topbar h1 { font-size: 15px; }
   .brand-mark { width: 22px; height: 22px; }
-  .topbar-actions { gap: 8px; }
-  .topbar-actions button { padding: 7px 12px; white-space: nowrap; }
+  .topbar-actions { gap: 8px; flex: 1 1 100%; }
+  .topbar-actions button { padding: 7px 12px; white-space: nowrap; flex: 1; }
   /* The textual status is what pushed "Settings" off the edge; the stat cards
      and the progress bar already carry that information on a phone. */
   .status { display: none; }
@@ -307,4 +309,49 @@ textarea { resize: vertical; }
   /* Settings fills the width with a 16px gutter rather than sitting at 460px. */
   .modal { padding: 16px; align-items: flex-start; }
   .modal-card { width: 100%; max-height: calc(100vh - 32px); padding: 20px 16px; }
+}
+
+/* Network log: scans down the left, what each one changed on a rail. */
+.log-card { width: 640px; }
+.log-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0 14px; }
+.log-tools input { flex: 1; min-width: 160px; }
+.log-tools .filters { flex-wrap: wrap; }
+.log-tools .chip { white-space: nowrap; }
+.timeline { font-size: 13px; }
+.tl-day {
+  margin: 18px 0 6px; font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.tl-day:first-child { margin-top: 0; }
+.tl-scan { display: grid; grid-template-columns: 68px 1fr; }
+.tl-time { color: var(--muted); font-size: 12px; padding-top: 5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl-items { border-left: 2px solid var(--line); padding: 2px 0 8px 14px; }
+.tl-item {
+  position: relative; display: flex; gap: 10px; align-items: baseline;
+  padding: 4px 8px; margin-left: -8px; border-radius: 6px;
+}
+.tl-item.linked { cursor: pointer; }
+.tl-item.linked:hover { background: var(--panel-2); }
+.tl-item::before {
+  content: ""; position: absolute; left: -15px; top: 9px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--offline); box-shadow: 0 0 0 3px var(--panel);
+}
+.tl-item.joined::before { background: var(--online); }
+.tl-item.new::before { background: var(--new); }
+.tl-item.left::before { background: var(--panel); box-shadow: inset 0 0 0 2px var(--offline), 0 0 0 3px var(--panel); }
+.tl-name { font-weight: 600; }
+.tl-what { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tl-item.joined .tl-what { color: var(--online); }
+.tl-item.new .tl-what { color: var(--new); }
+.tl-ip { margin-left: auto; }
+.tl-note { color: var(--muted); font-size: 12px; font-style: italic; }
+.tl-gap {
+  margin: 8px 0 8px 68px; padding: 6px 10px; border: 1px dashed var(--line); border-radius: 6px;
+  color: var(--muted); font-size: 12px;
+}
+.log-more { margin-top: 12px; }
+@media (max-width: 560px) {
+  .tl-ip { display: none; }
+  .tl-scan { grid-template-columns: 60px 1fr; }
+  .tl-gap { margin-left: 60px; }
 }

@@ -535,6 +535,7 @@ function select(id) {
 function applyState(next) {
   state = next;
   render();
+  refreshLogIfOpen();
 }
 
 // --- events ---
@@ -605,6 +606,145 @@ $('settingsBtn').addEventListener('click', () => { $('settingsModal').hidden = f
 $('settingsClose').addEventListener('click', () => { $('settingsModal').hidden = true; });
 $('settingsModal').addEventListener('click', (e) => {
   if (e.target === $('settingsModal')) $('settingsModal').hidden = true;
+});
+
+// --- network log ---
+//
+// Fetched on demand rather than carried in the state: a month of entries is
+// too much to push to every tab on every scan. The state carries a summary
+// instead, and a change to it while the log is open reloads the newest page.
+
+let logView = { events: [], nextBeforeSeq: null, latestAt: null, filter: 'all', query: '' };
+const LOG_WHAT = { joined: 'came online', left: 'went offline', new: 'new device' };
+
+function logDayLabel(date) {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+const clockTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/** A gap's window, with the date on whichever end isn't the same day. */
+function gapText(entry) {
+  const from = new Date(entry.from);
+  const to = new Date(entry.at);
+  const fromText = from.toDateString() === to.toDateString()
+    ? clockTime(entry.from)
+    : `${from.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${clockTime(entry.from)}`;
+  return `No scans from ${fromText} to ${clockTime(entry.at)}. What changed in between shows at ${clockTime(entry.at)}.`;
+}
+
+function logMatches(entry) {
+  const { filter: f, query: q } = logView;
+  if (entry.type === 'gap' || entry.type === 'baseline') return f === 'all' && !q;
+  if (f !== 'all' && entry.type !== f) return false;
+  if (!q) return true;
+  const device = state.devices.find((d) => d.id === entry.id);
+  return [entry.label, entry.ip, entry.id, device && displayName(device)]
+    .filter(Boolean)
+    .some((field) => field.toLowerCase().includes(q));
+}
+
+function renderLog() {
+  const list = $('logList');
+  const shown = logView.events.filter(logMatches);
+  $('logMore').hidden = logView.nextBeforeSeq === null;
+
+  if (!shown.length) {
+    const empty = logView.events.length
+      ? 'Nothing in the loaded entries matches that filter.'
+      : 'Nothing logged yet. Entries appear as scans see devices come and go.';
+    list.innerHTML = `<p class="empty">${empty}</p>`;
+    return;
+  }
+
+  // Entries arrive newest first; one scan's entries share a timestamp, so
+  // consecutive equal `at`s become one block on the rail.
+  const html = [];
+  let day = null;
+  let block = null;
+  const closeBlock = () => {
+    if (!block) return;
+    html.push(`<div class="tl-scan"><div class="tl-time">${clockTime(block.at)}</div><div class="tl-items">${block.items.join('')}</div></div>`);
+    block = null;
+  };
+
+  for (const entry of shown) {
+    const date = new Date(entry.at);
+    if (date.toDateString() !== day) {
+      closeBlock();
+      day = date.toDateString();
+      html.push(`<div class="tl-day">${escapeHtml(logDayLabel(date))}</div>`);
+    }
+    if (entry.type === 'gap') {
+      closeBlock();
+      html.push(`<div class="tl-gap">${escapeHtml(gapText(entry))}</div>`);
+      continue;
+    }
+    if (!block || block.at !== entry.at) {
+      closeBlock();
+      block = { at: entry.at, items: [] };
+    }
+    if (entry.type === 'baseline') {
+      block.items.push(`<div class="tl-item"><span class="tl-note">First scan: ${entry.count} devices recorded as the starting point.</span></div>`);
+      continue;
+    }
+    // The name it has now, if it's still on the list; otherwise what it was
+    // called when the entry was written.
+    const device = state.devices.find((d) => d.id === entry.id);
+    const name = device ? displayName(device) : entry.label;
+    block.items.push(`<div class="tl-item ${entry.type}${device ? ' linked' : ''}" ${device ? `data-id="${escapeHtml(entry.id)}"` : ''}>
+      <span class="tl-name">${escapeHtml(name)}</span>
+      <span class="tl-what">${LOG_WHAT[entry.type]}${device ? '' : ' (since forgotten)'}</span>
+      <span class="tl-ip mono">${escapeHtml(entry.ip || '')}</span>
+    </div>`);
+  }
+  closeBlock();
+  list.innerHTML = html.join('');
+}
+
+async function loadLog({ older = false } = {}) {
+  const page = await api.getLog({ limit: 300, beforeSeq: older ? logView.nextBeforeSeq : null });
+  logView.events = older ? logView.events.concat(page.events) : page.events;
+  logView.nextBeforeSeq = page.nextBeforeSeq;
+  if (!older) logView.latestAt = state.log ? state.log.latestAt : null;
+  renderLog();
+}
+
+/** Called on every state push: refresh an open log when a scan added to it. */
+function refreshLogIfOpen() {
+  if ($('logModal').hidden || !state.log) return;
+  if (state.log.latestAt !== logView.latestAt) loadLog().catch(() => {});
+}
+
+$('logBtn').addEventListener('click', () => {
+  $('logModal').hidden = false;
+  $('logList').innerHTML = '<p class="empty">Loading...</p>';
+  loadLog().catch((err) => { $('logList').innerHTML = `<p class="empty">Couldn't load the log: ${escapeHtml(err.message)}</p>`; });
+});
+$('logClose').addEventListener('click', () => { $('logModal').hidden = true; });
+$('logModal').addEventListener('click', (e) => {
+  if (e.target === $('logModal')) { $('logModal').hidden = true; return; }
+  const item = e.target.closest('.tl-item.linked');
+  if (!item) return;
+  $('logModal').hidden = true;
+  select(item.dataset.id);
+});
+$('logMore').addEventListener('click', () => loadLog({ older: true }).catch(() => {}));
+$('logFilters').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  logView.filter = chip.dataset.filter;
+  for (const c of $('logFilters').children) c.classList.toggle('active', c === chip);
+  renderLog();
+});
+$('logSearch').addEventListener('input', (e) => {
+  logView.query = e.target.value.trim().toLowerCase();
+  renderLog();
 });
 
 function bindSetting(elementId, key, read) {

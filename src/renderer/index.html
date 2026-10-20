@@ -20,6 +20,7 @@
     <div class="topbar-actions">
       <span class="status" id="status">Ready</span>
       <button id="scanBtn" class="primary">Scan now</button>
+      <button id="logBtn" class="ghost" title="What came online, went offline or appeared, scan by scan">Network log</button>
       <button id="settingsBtn" class="ghost" title="Settings">Settings</button>
     </div>
   </header>
@@ -86,6 +87,27 @@
       </div>
     </aside>
   </main>
+
+  <div class="modal" id="logModal" hidden>
+    <div class="modal-card log-card">
+      <button class="close" id="logClose" title="Close">&times;</button>
+      <h2>Network log</h2>
+      <p class="hint">What each scan found had changed, newest first. A device that drops off and comes
+        back between two scans won't show up here, and times are when the scan ran, not the moment
+        it happened. Kept for 30 days.</p>
+      <div class="log-tools">
+        <div class="filters" id="logFilters">
+          <button class="chip active" data-filter="all">All</button>
+          <button class="chip" data-filter="joined">Came online</button>
+          <button class="chip" data-filter="left">Went offline</button>
+          <button class="chip" data-filter="new">New</button>
+        </div>
+        <input id="logSearch" type="search" placeholder="Filter by name or IP..." autocomplete="off" />
+      </div>
+      <div id="logList" class="timeline"></div>
+      <button id="logMore" class="ghost log-more" hidden>Show older</button>
+    </div>
+  </div>
 
   <div class="modal" id="settingsModal" hidden>
     <div class="modal-card">

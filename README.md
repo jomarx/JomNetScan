@@ -178,6 +178,29 @@ top. Anything online counts as "just seen" under **Last seen**.
 The search box and the All / New / Online / Offline chips narrow the list; the
 sort applies to whatever is left.
 
+## Network log
+
+**Network log** in the top bar shows what came online, what went offline and
+what appeared for the first time, newest first, grouped by day with each
+scan's changes on a timeline. Filter by kind or by name and IP. Click an entry
+to open that device. An open log updates by itself when a scan lands.
+
+The log is built from scans, so it's only as fine-grained as the scan
+interval:
+
+- A device that drops off and comes back between two scans never appears.
+- A time is when the scan ran, not the moment the device came or went.
+- When the app wasn't scanning for well over the interval (the laptop slept,
+  the server restarted), the log shows a **No scans from … to …** marker.
+  Whatever changed in that window is listed at the first scan after it, rather
+  than pretending it happened then.
+- The first scan of an empty list is one "starting point" entry, not a burst
+  of arrivals.
+
+Entries show the device's current name. A device you've since forgotten keeps
+the name it had at the time. The log lives in `events.json` and keeps 30 days
+(at most 20,000 entries). It isn't part of a backup.
+
 ## Automatic naming
 
 Most devices will tell you their name if you listen. Every scan runs two
@@ -329,8 +352,8 @@ there.
 Web: `/var/lib/jomnetscan` under systemd, `.data/` beside the repo otherwise,
 or wherever `JOMNETSCAN_DATA` points.
 
-Either way it's `devices.json`, `settings.json`, the downloaded `oui.json`,
-and on the web build a `secret` file used to sign session cookies. Deleting
+Either way it's `devices.json`, `settings.json`, the network log in
+`events.json`, the downloaded `oui.json`, and on the web build a `secret` file used to sign session cookies. Deleting
 `devices.json` resets the app; everything is then "new" again.
 
 The two builds keep separate data. Pointing them at the same directory is not
@@ -428,6 +451,7 @@ src/core/             no Electron, no HTTP — shared by both front ends
   ports.js              the curated port list and the TCP connect scan
   migrate.js            startup housekeeping both front ends need
   backup.js             export/import of devices and settings, and the merge
+  eventlog.js           the network log: what each scan changed, events.json
 src/desktop/          the Electron app
   main.js               window, tray, notifications, IPC
   preload.js            the narrow API the UI is allowed to call

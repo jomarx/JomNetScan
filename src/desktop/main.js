@@ -13,10 +13,12 @@ const oui = require('../core/oui.js');
 const ports = require('../core/ports.js');
 const { migrateStore } = require('../core/migrate.js');
 const backup = require('../core/backup.js');
+const { EventLog } = require('../core/eventlog.js');
 
 let mainWindow = null;
 let tray = null;
 let store = null;
+let eventLog = null;
 let scanner = null;
 let scanTimer = null;
 let lastScan = null;
@@ -51,6 +53,7 @@ function buildState() {
     newBadgeMs: NEW_BADGE_MS,
     portScanning,
     pinging: pingSession ? pingSession.id : null,
+    log: eventLog.summary(),
   };
 }
 
@@ -93,7 +96,17 @@ async function runScan(trigger) {
   try {
     const result = await scanner.scan(store.getSettings());
     const baseline = store.isEmpty();
+    const before = EventLog.snapshot(store);
     const newDevices = store.merge(result.devices, result.startedAt);
+    try {
+      eventLog.recordScan({
+        store, before, newDevices, baseline, at: result.startedAt,
+        intervalMinutes: store.getSettings().intervalMinutes,
+      });
+    } catch (err) {
+      // The log is a record of the scan, not part of it.
+      console.error(`Couldn't write the network log: ${err.message}`);
+    }
     store.expireNewFlags();
     lastScan = {
       at: result.finishedAt,
@@ -178,6 +191,7 @@ function createWindow() {
 
 function start() {
   store = new Store(app.getPath('userData'));
+  eventLog = new EventLog(app.getPath('userData'));
   scanner = new Scanner();
   oui.load([ouiUserPath(), path.join(__dirname, '..', '..', 'data', 'oui.json')]);
 
@@ -212,6 +226,11 @@ app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', () => { /* tray keeps the app alive on Windows */ });
 
 ipcMain.handle('state:get', () => buildState());
+
+ipcMain.handle('log:get', (_e, opts = {}) => eventLog.page({
+  limit: Number(opts && opts.limit) || 200,
+  beforeSeq: Number.isInteger(opts && opts.beforeSeq) ? opts.beforeSeq : null,
+}));
 
 ipcMain.handle('scan:run', async () => {
   await runScan('manual');

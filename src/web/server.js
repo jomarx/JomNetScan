@@ -19,6 +19,7 @@ const { createAuth } = require('./auth.js');
 const { createUpdater } = require('./updater.js');
 const notify = require('./notify.js');
 const backup = require('../core/backup.js');
+const { EventLog } = require('../core/eventlog.js');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
 const BUNDLED_OUI = path.join(__dirname, '..', '..', 'data', 'oui.json');
@@ -48,6 +49,7 @@ let ouiDownloading = false;
 let scanTimer = null;
 
 const store = new Store(DATA_DIR);
+const eventLog = new EventLog(DATA_DIR);
 const scanner = new Scanner();
 const auth = createAuth({ dataDir: DATA_DIR, log });
 const updater = createUpdater({ log, dataDir: DATA_DIR });
@@ -70,6 +72,7 @@ function buildState() {
     portScanning,
     pinging: pingSession ? pingSession.id : null,
     update: updater.getState(),
+    log: eventLog.summary(),
   };
 }
 
@@ -154,7 +157,17 @@ async function runScan(trigger) {
     syncBusyFlag();
     const result = await scanning;
     const baseline = store.isEmpty();
+    const before = EventLog.snapshot(store);
     const newDevices = store.merge(result.devices, result.startedAt);
+    try {
+      eventLog.recordScan({
+        store, before, newDevices, baseline, at: result.startedAt,
+        intervalMinutes: store.getSettings().intervalMinutes,
+      });
+    } catch (err) {
+      // The log is a record of the scan, not part of it.
+      log(`Couldn't write the network log: ${err.message}`);
+    }
     store.expireNewFlags();
     lastScan = {
       at: result.finishedAt,
@@ -489,6 +502,15 @@ async function handle(req, res) {
 
   if (route === '/api/state' && req.method === 'GET') {
     sendJson(res, buildState());
+    return;
+  }
+
+  if (route === '/api/log' && req.method === 'GET') {
+    const beforeSeq = Number.parseInt(url.searchParams.get('before'), 10);
+    sendJson(res, eventLog.page({
+      limit: Number(url.searchParams.get('limit')) || 200,
+      beforeSeq: Number.isInteger(beforeSeq) ? beforeSeq : null,
+    }));
     return;
   }
 

@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('jomnet', {
   platform: 'desktop',
 
   getState: () => ipcRenderer.invoke('state:get'),
+  getLog: (opts = {}) => ipcRenderer.invoke('log:get', {
+    limit: opts.limit,
+    beforeSeq: Number.isInteger(opts.beforeSeq) ? opts.beforeSeq : null,
+  }),
   scan: () => ipcRenderer.invoke('scan:run'),
   rename: (id, name) => ipcRenderer.invoke('device:rename', { id, name }),
   setNotes: (id, notes) => ipcRenderer.invoke('device:notes', { id, notes }),

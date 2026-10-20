@@ -70,6 +70,11 @@ if (!window.jomnet) {
     platform: 'web',
 
     getState: () => request('/api/state'),
+    getLog: (opts = {}) => {
+      const params = new URLSearchParams({ limit: String(opts.limit || 200) });
+      if (Number.isInteger(opts.beforeSeq)) params.set('before', String(opts.beforeSeq));
+      return request(`/api/log?${params}`);
+    },
     scan: () => request('/api/scan', {}),
     rename: (id, name) => request('/api/device/rename', { id, name }),
     setNotes: (id, notes) => request('/api/device/notes', { id, notes }),
