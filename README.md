@@ -193,7 +193,8 @@ interval:
 - When the app wasn't scanning for well over the interval (the laptop slept,
   the server restarted), the log shows a **No scans from … to …** marker.
   Whatever changed in that window is listed at the first scan after it, rather
-  than pretending it happened then.
+  than pretending it happened then. With automatic scanning off there's no
+  interval to miss, so manual scans never get this marker.
 - The first scan of an empty list is one "starting point" entry, not a burst
   of arrivals.
 
@@ -353,7 +354,7 @@ Web: `/var/lib/jomnetscan` under systemd, `.data/` beside the repo otherwise,
 or wherever `JOMNETSCAN_DATA` points.
 
 Either way it's `devices.json`, `settings.json`, the network log in
-`events.json`, the downloaded `oui.json`, and on the web build a `secret` file used to sign session cookies. Deleting
+`events.json` (plus `events-clock.json`, when the last scan ran), the downloaded `oui.json`, and on the web build a `secret` file used to sign session cookies. Deleting
 `devices.json` resets the app; everything is then "new" again.
 
 The two builds keep separate data. Pointing them at the same directory is not

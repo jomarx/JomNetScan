@@ -73,6 +73,7 @@ if (!window.jomnet) {
     getLog: (opts = {}) => {
       const params = new URLSearchParams({ limit: String(opts.limit || 200) });
       if (Number.isInteger(opts.beforeSeq)) params.set('before', String(opts.beforeSeq));
+      if (Number.isInteger(opts.afterSeq)) params.set('after', String(opts.afterSeq));
       return request(`/api/log?${params}`);
     },
     scan: () => request('/api/scan', {}),
@@ -90,14 +91,35 @@ if (!window.jomnet) {
     testAlerts: () => request('/api/alerts/test', {}),
     applyUpdate: () => request('/api/update/apply', {}),
 
-    exportData: (opts = {}) => {
+    // Fetched, then saved from a blob, rather than a plain link to the URL: a
+    // link would save whatever came back - a 401 after the session expired
+    // included - as the "backup", and nothing here could tell.
+    exportData: async (opts = {}) => {
+      let response;
+      try {
+        response = await fetch(opts.includeSecrets === true ? '/api/export?secrets=1' : '/api/export', {
+          credentials: 'same-origin',
+        });
+      } catch (err) {
+        return { error: err.message };
+      }
+      if (response.status === 401) {
+        window.location.href = '/login';
+        return { error: 'Not signed in' };
+      }
+      if (!response.ok) return { error: `Request failed: ${response.status}` };
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const url = URL.createObjectURL(await response.blob());
       const link = document.createElement('a');
-      link.href = opts.includeSecrets === true ? '/api/export?secrets=1' : '/api/export';
-      link.download = '';
+      link.href = url;
+      link.download = match ? match[1] : 'jomnetscan-backup.json';
       document.body.appendChild(link);
       link.click();
       link.remove();
-      return Promise.resolve({ ok: true });
+      // Revoking straight away can cancel the save in some browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      return { ok: true };
     },
 
     // Resolves with the state plus an `imported` summary (and `settingsRestore` when

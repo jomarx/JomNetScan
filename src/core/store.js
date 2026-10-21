@@ -41,12 +41,28 @@ function readJson(file, fallback) {
   }
 }
 
-/** Write via a temp file + rename so a crash mid-write can't shred the device list. */
-function writeJson(file, value) {
+/**
+ * Write via a temp file + rename so a crash mid-write can't shred the device
+ * list. Owner-only, because settings.json holds the Telegram token and webhook
+ * URL: the server's 0700 state directory covers that today, a data folder
+ * pointed anywhere else wouldn't. The chmod covers a temp file left behind by
+ * a crash, which writeFileSync would reuse with its old mode.
+ */
+function writeJson(file, value, { pretty = true } = {}) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+  fs.writeFileSync(tmp, pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value), { mode: 0o600 });
+  fs.chmodSync(tmp, 0o600);
   fs.renameSync(tmp, file);
+}
+
+/** Tighten a file written before writeJson went owner-only. */
+function makePrivate(file) {
+  try {
+    if (fs.existsSync(file)) fs.chmodSync(file, 0o600);
+  } catch {
+    // Not ours to change: leave it rather than refuse to start.
+  }
 }
 
 class Store {
@@ -56,6 +72,7 @@ class Store {
     this.settingsFile = path.join(baseDir, 'settings.json');
     this.devices = readJson(this.devicesFile, {});
     this.settings = { ...DEFAULT_SETTINGS, ...readJson(this.settingsFile, {}) };
+    makePrivate(this.settingsFile);
   }
 
   saveDevices() {
@@ -272,4 +289,4 @@ class Store {
   }
 }
 
-module.exports = { Store, DEFAULT_SETTINGS, NEW_BADGE_MS };
+module.exports = { Store, DEFAULT_SETTINGS, NEW_BADGE_MS, readJson, writeJson };

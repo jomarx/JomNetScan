@@ -19,7 +19,7 @@ const { createAuth } = require('./auth.js');
 const { createUpdater } = require('./updater.js');
 const notify = require('./notify.js');
 const backup = require('../core/backup.js');
-const { EventLog } = require('../core/eventlog.js');
+const { EventLog, mergeScan } = require('../core/eventlog.js');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
 const BUNDLED_OUI = path.join(__dirname, '..', '..', 'data', 'oui.json');
@@ -156,18 +156,10 @@ async function runScan(trigger) {
     const scanning = scanner.scan(store.getSettings());
     syncBusyFlag();
     const result = await scanning;
-    const baseline = store.isEmpty();
-    const before = EventLog.snapshot(store);
-    const newDevices = store.merge(result.devices, result.startedAt);
-    try {
-      eventLog.recordScan({
-        store, before, newDevices, baseline, at: result.startedAt,
-        intervalMinutes: store.getSettings().intervalMinutes,
-      });
-    } catch (err) {
-      // The log is a record of the scan, not part of it.
-      log(`Couldn't write the network log: ${err.message}`);
-    }
+    const { baseline, newDevices } = mergeScan({
+      store, eventLog, result,
+      onLogError: (err) => log(`Couldn't write the network log: ${err.message}`),
+    });
     store.expireNewFlags();
     lastScan = {
       at: result.finishedAt,
@@ -506,10 +498,14 @@ async function handle(req, res) {
   }
 
   if (route === '/api/log' && req.method === 'GET') {
-    const beforeSeq = Number.parseInt(url.searchParams.get('before'), 10);
+    const seqParam = (name) => {
+      const value = Number.parseInt(url.searchParams.get(name), 10);
+      return Number.isInteger(value) ? value : null;
+    };
     sendJson(res, eventLog.page({
       limit: Number(url.searchParams.get('limit')) || 200,
-      beforeSeq: Number.isInteger(beforeSeq) ? beforeSeq : null,
+      beforeSeq: seqParam('before'),
+      afterSeq: seqParam('after'),
     }));
     return;
   }

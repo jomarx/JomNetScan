@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('jomnet', {
   getLog: (opts = {}) => ipcRenderer.invoke('log:get', {
     limit: opts.limit,
     beforeSeq: Number.isInteger(opts.beforeSeq) ? opts.beforeSeq : null,
+    afterSeq: Number.isInteger(opts.afterSeq) ? opts.afterSeq : null,
   }),
   scan: () => ipcRenderer.invoke('scan:run'),
   rename: (id, name) => ipcRenderer.invoke('device:rename', { id, name }),

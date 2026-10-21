@@ -13,7 +13,7 @@ const oui = require('../core/oui.js');
 const ports = require('../core/ports.js');
 const { migrateStore } = require('../core/migrate.js');
 const backup = require('../core/backup.js');
-const { EventLog } = require('../core/eventlog.js');
+const { EventLog, mergeScan } = require('../core/eventlog.js');
 
 let mainWindow = null;
 let tray = null;
@@ -95,18 +95,10 @@ async function runScan(trigger) {
   pushState();
   try {
     const result = await scanner.scan(store.getSettings());
-    const baseline = store.isEmpty();
-    const before = EventLog.snapshot(store);
-    const newDevices = store.merge(result.devices, result.startedAt);
-    try {
-      eventLog.recordScan({
-        store, before, newDevices, baseline, at: result.startedAt,
-        intervalMinutes: store.getSettings().intervalMinutes,
-      });
-    } catch (err) {
-      // The log is a record of the scan, not part of it.
-      console.error(`Couldn't write the network log: ${err.message}`);
-    }
+    const { baseline, newDevices } = mergeScan({
+      store, eventLog, result,
+      onLogError: (err) => console.error(`Couldn't write the network log: ${err.message}`),
+    });
     store.expireNewFlags();
     lastScan = {
       at: result.finishedAt,
@@ -230,6 +222,7 @@ ipcMain.handle('state:get', () => buildState());
 ipcMain.handle('log:get', (_e, opts = {}) => eventLog.page({
   limit: Number(opts && opts.limit) || 200,
   beforeSeq: Number.isInteger(opts && opts.beforeSeq) ? opts.beforeSeq : null,
+  afterSeq: Number.isInteger(opts && opts.afterSeq) ? opts.afterSeq : null,
 }));
 
 ipcMain.handle('scan:run', async () => {

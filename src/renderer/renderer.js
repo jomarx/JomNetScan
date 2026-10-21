@@ -612,9 +612,10 @@ $('settingsModal').addEventListener('click', (e) => {
 //
 // Fetched on demand rather than carried in the state: a month of entries is
 // too much to push to every tab on every scan. The state carries a summary
-// instead, and a change to it while the log is open reloads the newest page.
+// instead, and when its latest seq passes the newest one shown, an open log
+// fetches just what was added and puts it on top of what's already loaded.
 
-let logView = { events: [], nextBeforeSeq: null, latestAt: null, filter: 'all', query: '' };
+let logView = { events: [], nextBeforeSeq: null, filter: 'all', query: '' };
 const LOG_WHAT = { joined: 'came online', left: 'went offline', new: 'new device' };
 
 function logDayLabel(date) {
@@ -638,20 +639,28 @@ function gapText(entry) {
   return `No scans from ${fromText} to ${clockTime(entry.at)}. What changed in between shows at ${clockTime(entry.at)}.`;
 }
 
-function logMatches(entry) {
+/**
+ * What the device was called when the entry was written. Entries carry the
+ * device's name fields rather than a finished label, so this is the same
+ * displayName() as everywhere else; `label` is from entries written before.
+ */
+const snapshotName = (entry) => entry.label || displayName(entry);
+
+function logMatches(entry, devicesById) {
   const { filter: f, query: q } = logView;
   if (entry.type === 'gap' || entry.type === 'baseline') return f === 'all' && !q;
   if (f !== 'all' && entry.type !== f) return false;
   if (!q) return true;
-  const device = state.devices.find((d) => d.id === entry.id);
-  return [entry.label, entry.ip, entry.id, device && displayName(device)]
+  const device = devicesById.get(entry.id);
+  return [snapshotName(entry), entry.ip, entry.id, device && displayName(device)]
     .filter(Boolean)
     .some((field) => field.toLowerCase().includes(q));
 }
 
 function renderLog() {
   const list = $('logList');
-  const shown = logView.events.filter(logMatches);
+  const devicesById = new Map(state.devices.map((d) => [d.id, d]));
+  const shown = logView.events.filter((entry) => logMatches(entry, devicesById));
   $('logMore').hidden = logView.nextBeforeSeq === null;
 
   if (!shown.length) {
@@ -695,8 +704,8 @@ function renderLog() {
     }
     // The name it has now, if it's still on the list; otherwise what it was
     // called when the entry was written.
-    const device = state.devices.find((d) => d.id === entry.id);
-    const name = device ? displayName(device) : entry.label;
+    const device = devicesById.get(entry.id);
+    const name = device ? displayName(device) : snapshotName(entry);
     block.items.push(`<div class="tl-item ${entry.type}${device ? ' linked' : ''}" ${device ? `data-id="${escapeHtml(entry.id)}"` : ''}>
       <span class="tl-name">${escapeHtml(name)}</span>
       <span class="tl-what">${LOG_WHAT[entry.type]}${device ? '' : ' (since forgotten)'}</span>
@@ -707,24 +716,70 @@ function renderLog() {
   list.innerHTML = html.join('');
 }
 
-async function loadLog({ older = false } = {}) {
-  const page = await api.getLog({ limit: 300, beforeSeq: older ? logView.nextBeforeSeq : null });
-  logView.events = older ? logView.events.concat(page.events) : page.events;
+// One log request at a time. Each task reads logView when it runs, not when
+// it was queued, so a refresh landing during "Show older" can't splice two
+// answers together, and a scan that lands mid-fetch is caught by the check
+// the next task makes.
+let logQueue = Promise.resolve();
+function queueLog(task) {
+  const run = logQueue.then(task);
+  logQueue = run.catch(() => {});
+  return run;
+}
+
+const newestLoadedSeq = () => (logView.events.length ? logView.events[0].seq : null);
+
+async function loadNewestPage() {
+  const page = await api.getLog({ limit: 300 });
+  logView.events = page.events;
   logView.nextBeforeSeq = page.nextBeforeSeq;
-  if (!older) logView.latestAt = state.log ? state.log.latestAt : null;
   renderLog();
 }
 
-/** Called on every state push: refresh an open log when a scan added to it. */
+async function loadOlderPage() {
+  if (logView.nextBeforeSeq === null) return;
+  const page = await api.getLog({ limit: 300, beforeSeq: logView.nextBeforeSeq });
+  logView.events = logView.events.concat(page.events);
+  logView.nextBeforeSeq = page.nextBeforeSeq;
+  renderLog();
+}
+
+/** Just what was added since the newest entry shown, on top of what's loaded. */
+async function loadNewerEntries() {
+  const newest = newestLoadedSeq();
+  if (newest === null) { await loadNewestPage(); return; }
+  const page = await api.getLog({ limit: 1000, afterSeq: newest });
+  if (page.truncated) {
+    // More arrived than one request carries; joining them would leave a
+    // hole, so start over from the newest page.
+    logView.events = page.events;
+    logView.nextBeforeSeq = page.nextBeforeSeq;
+    renderLog();
+    return;
+  }
+  if (!page.events.length) return;
+  // Keep what the reader is looking at in place as rows land above it.
+  const card = $('logModal').querySelector('.modal-card');
+  const fromBottom = card.scrollHeight - card.scrollTop;
+  logView.events = page.events.concat(logView.events);
+  renderLog();
+  if (card.scrollTop > 0) card.scrollTop = card.scrollHeight - fromBottom;
+}
+
+/** Called on every state push: bring an open log up to date when a scan added to it. */
 function refreshLogIfOpen() {
-  if ($('logModal').hidden || !state.log) return;
-  if (state.log.latestAt !== logView.latestAt) loadLog().catch(() => {});
+  if ($('logModal').hidden) return;
+  queueLog(() => {
+    if ($('logModal').hidden || !state.log) return null;
+    return state.log.latestSeq !== newestLoadedSeq() ? loadNewerEntries() : null;
+  }).catch(() => {});
 }
 
 $('logBtn').addEventListener('click', () => {
   $('logModal').hidden = false;
   $('logList').innerHTML = '<p class="empty">Loading...</p>';
-  loadLog().catch((err) => { $('logList').innerHTML = `<p class="empty">Couldn't load the log: ${escapeHtml(err.message)}</p>`; });
+  queueLog(loadNewestPage)
+    .catch((err) => { $('logList').innerHTML = `<p class="empty">Couldn't load the log: ${escapeHtml(err.message)}</p>`; });
 });
 $('logClose').addEventListener('click', () => { $('logModal').hidden = true; });
 $('logModal').addEventListener('click', (e) => {
@@ -734,7 +789,7 @@ $('logModal').addEventListener('click', (e) => {
   $('logModal').hidden = true;
   select(item.dataset.id);
 });
-$('logMore').addEventListener('click', () => loadLog({ older: true }).catch(() => {}));
+$('logMore').addEventListener('click', () => queueLog(loadOlderPage).catch(() => {}));
 $('logFilters').addEventListener('click', (e) => {
   const chip = e.target.closest('.chip');
   if (!chip) return;
